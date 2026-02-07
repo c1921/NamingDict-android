@@ -1,5 +1,6 @@
 ﻿package io.github.c1921.namingdict.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -497,15 +498,12 @@ private fun DictDetailScreen(
     onToggleFavorite: () -> Unit,
     onBack: () -> Unit
 ) {
+    BackHandler(onBack = onBack)
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {},
-                navigationIcon = {
-                    TextButton(onClick = onBack) {
-                        Text(text = stringResource(R.string.back))
-                    }
-                },
                 actions = {
                     IconButton(onClick = onToggleFavorite) {
                         Icon(
@@ -659,4 +657,6 @@ private fun formatIntList(values: List<Int>): String {
     }
     return values.joinToString(" ")
 }
+
+
 
