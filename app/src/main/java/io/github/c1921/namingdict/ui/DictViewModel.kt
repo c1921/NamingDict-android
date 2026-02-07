@@ -1,11 +1,13 @@
-package io.github.c1921.namingdict.ui
+﻿package io.github.c1921.namingdict.ui
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import io.github.c1921.namingdict.data.DictionaryRepository
 import io.github.c1921.namingdict.data.FilterEngine
 import io.github.c1921.namingdict.data.IndexCategory
+import io.github.c1921.namingdict.data.UserPrefsRepository
 import io.github.c1921.namingdict.data.model.DictEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,7 +30,10 @@ data class UiState(
     val selectedEntryId: Int? = null
 )
 
-class DictViewModel(private val repository: DictionaryRepository) : ViewModel() {
+class DictViewModel(
+    private val repository: DictionaryRepository,
+    private val userPrefsRepository: UserPrefsRepository
+) : ViewModel() {
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState
 
@@ -47,7 +52,12 @@ class DictViewModel(private val repository: DictionaryRepository) : ViewModel() 
     }
 
     fun selectCategory(category: IndexCategory) {
-        _uiState.value = _uiState.value.copy(selectedCategory = category)
+        val updated = _uiState.value.copy(selectedCategory = category)
+        _uiState.value = updated
+        persistFilterState(
+            category = updated.selectedCategory,
+            selectedValues = updated.selectedValues
+        )
     }
 
     fun toggleValue(category: IndexCategory, value: String) {
@@ -86,21 +96,18 @@ class DictViewModel(private val repository: DictionaryRepository) : ViewModel() 
     fun toggleFavorite(id: Int) {
         val current = _uiState.value
         val isFavorited = current.favoriteIds.contains(id)
-        val newFavoriteIds = if (isFavorited) {
-            current.favoriteIds - id
-        } else {
-            current.favoriteIds + id
-        }
         favoriteOrder = if (isFavorited) {
             favoriteOrder.filterNot { it == id }
         } else {
             listOf(id) + favoriteOrder.filterNot { it == id }
         }
+        val newFavoriteIds = favoriteOrder.toSet()
         val newFavoriteEntries = favoriteOrder.mapNotNull { favoriteId -> idToEntry[favoriteId] }
         _uiState.value = current.copy(
             favoriteIds = newFavoriteIds,
             favoriteEntries = newFavoriteEntries
         )
+        persistFavoritesOrder(favoriteOrder)
     }
 
     fun selectEntry(id: Int) {
@@ -116,21 +123,33 @@ class DictViewModel(private val repository: DictionaryRepository) : ViewModel() 
         viewModelScope.launch {
             try {
                 val data = repository.loadAll()
+                val snapshot = userPrefsRepository.readSnapshot()
+
                 entries = data.entries
                 index = data.index
                 idToEntry = entries.associateBy { it.id }
                 allIds = entries.map { it.id }.toSet()
-                favoriteOrder = favoriteOrder.filter { idToEntry.containsKey(it) }
+
+                favoriteOrder = snapshot.favoriteOrder.filter { favoriteId ->
+                    idToEntry.containsKey(favoriteId)
+                }
                 val favoriteIds = favoriteOrder.toSet()
                 val favoriteEntries = favoriteOrder.mapNotNull { favoriteId -> idToEntry[favoriteId] }
-                val sortedEntries = entries.sortedBy { it.id }
+
+                val selectedCategory = resolveCategory(snapshot.selectedCategoryKey)
+                val selectedValues = sanitizeSelectedValues(snapshot.selectedValuesByCategoryKey)
+                val filteredIds = FilterEngine.filterIds(index, selectedValues, allIds)
+                val filteredEntries = filteredIds.mapNotNull { idToEntry[it] }.sortedBy { it.id }
+
                 _uiState.value = UiState(
                     isLoading = false,
                     entries = entries,
                     index = index,
                     idToEntry = idToEntry,
-                    filteredIds = allIds,
-                    filteredEntries = sortedEntries,
+                    selectedCategory = selectedCategory,
+                    selectedValues = selectedValues,
+                    filteredIds = filteredIds,
+                    filteredEntries = filteredEntries,
                     favoriteIds = favoriteIds,
                     favoriteEntries = favoriteEntries
                 )
@@ -149,21 +168,80 @@ class DictViewModel(private val repository: DictionaryRepository) : ViewModel() 
             val filteredEntries = filteredIds.mapNotNull { idToEntry[it] }.sortedBy { it.id }
             withContext(Dispatchers.Main) {
                 val latest = _uiState.value
-                _uiState.value = latest.copy(
+                val updated = latest.copy(
                     selectedValues = selectedValues,
                     filteredIds = filteredIds,
                     filteredEntries = filteredEntries
+                )
+                _uiState.value = updated
+                persistFilterState(
+                    category = updated.selectedCategory,
+                    selectedValues = updated.selectedValues
                 )
             }
         }
     }
 
+    private fun resolveCategory(categoryKey: String?): IndexCategory {
+        return IndexCategory.entries.firstOrNull { category -> category.key == categoryKey }
+            ?: IndexCategory.StructureRadical
+    }
+
+    private fun sanitizeSelectedValues(
+        selectedValuesByCategoryKey: Map<String, Set<String>>
+    ): Map<IndexCategory, Set<String>> {
+        if (selectedValuesByCategoryKey.isEmpty()) {
+            return emptyMap()
+        }
+        return buildMap {
+            selectedValuesByCategoryKey.forEach { (categoryKey, selectedValues) ->
+                val category = IndexCategory.entries.firstOrNull { it.key == categoryKey }
+                    ?: return@forEach
+                val availableValues = index[category.key].orEmpty().keys
+                val cleanedValues = selectedValues.filter { value -> value in availableValues }.toSet()
+                if (cleanedValues.isNotEmpty()) {
+                    put(category, cleanedValues)
+                }
+            }
+        }
+    }
+
+    private fun persistFavoritesOrder(order: List<Int>) {
+        val orderSnapshot = order.toList()
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                userPrefsRepository.writeFavoritesOrder(orderSnapshot)
+            }.onFailure { exception ->
+                Log.w(TAG, "Failed to persist favorites order.", exception)
+            }
+        }
+    }
+
+    private fun persistFilterState(
+        category: IndexCategory,
+        selectedValues: Map<IndexCategory, Set<String>>
+    ) {
+        val selectedValuesByCategoryKey = selectedValues.mapKeys { (key, _) -> key.key }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                userPrefsRepository.writeFilterState(category.key, selectedValuesByCategoryKey)
+            }.onFailure { exception ->
+                Log.w(TAG, "Failed to persist filter state.", exception)
+            }
+        }
+    }
+
     companion object {
-        fun factory(repository: DictionaryRepository): ViewModelProvider.Factory {
+        private const val TAG = "DictViewModel"
+
+        fun factory(
+            repository: DictionaryRepository,
+            userPrefsRepository: UserPrefsRepository
+        ): ViewModelProvider.Factory {
             return object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return DictViewModel(repository) as T
+                    return DictViewModel(repository, userPrefsRepository) as T
                 }
             }
         }
