@@ -1,6 +1,7 @@
 ﻿package io.github.c1921.namingdict.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -169,18 +170,31 @@ fun AppRoot(viewModel: DictViewModel) {
 
 @Composable
 private fun LoadingScreen() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator()
             Spacer(modifier = Modifier.height(12.dp))
-            Text(text = stringResource(R.string.loading))
+            Text(
+                text = stringResource(R.string.loading),
+                color = MaterialTheme.colorScheme.onBackground
+            )
         }
     }
 }
 
 @Composable
 private fun ErrorScreen(message: String, onRetry: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text = message, style = MaterialTheme.typography.bodyLarge)
             Spacer(modifier = Modifier.height(12.dp))
