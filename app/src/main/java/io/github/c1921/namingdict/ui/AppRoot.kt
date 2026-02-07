@@ -1,4 +1,4 @@
-package io.github.c1921.namingdict.ui
+﻿package io.github.c1921.namingdict.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -345,11 +345,36 @@ private fun SettingsScreen(modifier: Modifier = Modifier) {
 
 @Composable
 private fun DictListItem(entry: DictEntry, onClick: () -> Unit) {
-    val pinyin = entry.phonetics.pinyin.joinToString(" ").ifBlank { "-" }
+    val pinyin = formatPinyinList(entry.phonetics.pinyin)
     val definition = entry.definitions.firstOrNull().orEmpty().ifBlank { "-" }
     ListItem(
-        headlineContent = { Text(text = entry.char) },
-        supportingContent = { Text(text = "$pinyin - $definition", maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        headlineContent = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = entry.char,
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Text(
+                    text = pinyin,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                )
+            }
+        },
+        supportingContent = {
+            Text(
+                text = definition,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
@@ -502,7 +527,7 @@ private fun formatPinyinList(values: List<String>): String {
     if (values.isEmpty()) {
         return "-"
     }
-    return values.joinToString("，")
+    return values.joinToString(", ")
 }
 
 private fun formatIntList(values: List<Int>): String {
@@ -511,3 +536,4 @@ private fun formatIntList(values: List<Int>): String {
     }
     return values.joinToString(" ")
 }
+
