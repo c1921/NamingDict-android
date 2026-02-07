@@ -14,7 +14,6 @@ enum class IndexCategory(
     StructureStrokesTotal("structure.strokes_total", "总笔画", ValueSort.Numeric),
     StructureStrokesOther("structure.strokes_other", "部外笔画", ValueSort.Numeric),
     StructureType("structure.structure_type", "结构类型", ValueSort.Alpha),
-    PhoneticsPinyin("phonetics.pinyin", "拼音", ValueSort.Alpha),
     PhoneticsInitials("phonetics.initials", "声母", ValueSort.Alpha),
     PhoneticsFinals("phonetics.finals", "韵母", ValueSort.Alpha),
     PhoneticsTones("phonetics.tones", "声调", ValueSort.Numeric)

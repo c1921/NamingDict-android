@@ -17,6 +17,13 @@
     <string name="clear_all">清空全部</string>
     <string name="clear_category">清空本类</string>
     <string name="selected_filters">已选条件</string>
+    <string name="filter_empty_initials">（无声母）</string>
+    <string name="filter_empty_finals">（无韵母）</string>
+    <string name="filter_tone_first">一声</string>
+    <string name="filter_tone_second">二声</string>
+    <string name="filter_tone_third">三声</string>
+    <string name="filter_tone_fourth">四声</string>
+    <string name="filter_tone_light">轻声</string>
     <string name="results">结果：%1$d</string>
     <string name="no_results">当前筛选下无匹配条目</string>
     <string name="loading">正在加载字典...</string>

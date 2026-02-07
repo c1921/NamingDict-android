@@ -409,10 +409,11 @@ private fun FilterScreen(
             ) {
                 items(selectedPairs.size) { index ->
                     val (category, value) = selectedPairs[index]
+                    val displayValue = displayFilterValue(category = category, value = value)
                     FilterChip(
                         selected = true,
                         onClick = { onToggleValue(category, value) },
-                        label = { Text(text = "${category.label}: $value") }
+                        label = { Text(text = "${category.label}: $displayValue") }
                     )
                 }
             }
@@ -460,16 +461,40 @@ private fun FilterScreen(
                     contentPadding = PaddingValues(bottom = 8.dp)
                 ) {
                     items(sortedValues, key = { it }) { value ->
+                        val displayValue = displayFilterValue(category = category, value = value)
                         val isSelected = uiState.selectedValues[category].orEmpty().contains(value)
                         FilterChip(
                             selected = isSelected,
                             onClick = { onToggleValue(category, value) },
-                            label = { Text(text = value) }
+                            label = { Text(text = displayValue) }
                         )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun displayFilterValue(category: IndexCategory, value: String): String {
+    return when (category) {
+        IndexCategory.PhoneticsInitials -> {
+            if (value.isBlank()) stringResource(R.string.filter_empty_initials) else value
+        }
+        IndexCategory.PhoneticsFinals -> {
+            if (value.isBlank()) stringResource(R.string.filter_empty_finals) else value
+        }
+        IndexCategory.PhoneticsTones -> {
+            when (value.trim()) {
+                "1" -> stringResource(R.string.filter_tone_first)
+                "2" -> stringResource(R.string.filter_tone_second)
+                "3" -> stringResource(R.string.filter_tone_third)
+                "4" -> stringResource(R.string.filter_tone_fourth)
+                "5", "0" -> stringResource(R.string.filter_tone_light)
+                else -> value
+            }
+        }
+        else -> value
     }
 }
 
