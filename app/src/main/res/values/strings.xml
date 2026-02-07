@@ -42,5 +42,11 @@
     <string name="settings_entry_backup_restore_desc">通过 WebDAV 同步数据</string>
     <string name="settings_entry_about_desc">应用信息与版本</string>
     <string name="settings_about_description">用于选择人名用字的字典工具，仅收录《通用规范汉字表》包含的 8105 个字，免费、开源。</string>
+    <string name="settings_about_license_title">开源协议</string>
+    <string name="settings_about_license_value">GNU GPL v3.0</string>
+    <string name="settings_about_license_url">https://github.com/c1921/NamingDict/blob/master/LICENSE</string>
+    <string name="settings_about_github_title">GitHub</string>
+    <string name="settings_about_github_value">github.com/c1921/NamingDict</string>
+    <string name="settings_about_github_url">https://github.com/c1921/NamingDict</string>
     <string name="settings_app_version">%1$s</string>
 </resources>
