@@ -50,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,6 +58,8 @@ import io.github.c1921.namingdict.R
 import io.github.c1921.namingdict.data.IndexCategory
 import io.github.c1921.namingdict.data.sortIndexValues
 import io.github.c1921.namingdict.data.model.DictEntry
+
+private val HanziFontFamily = FontFamily.Serif
 
 private enum class MainTab(val titleResId: Int) {
     Filter(R.string.tab_filter),
@@ -355,7 +358,8 @@ private fun DictListItem(entry: DictEntry, onClick: () -> Unit) {
             ) {
                 Text(
                     text = entry.char,
-                    style = MaterialTheme.typography.titleLarge
+                    style = MaterialTheme.typography.titleLarge,
+                    fontFamily = HanziFontFamily
                 )
                 Text(
                     text = pinyin,
@@ -442,7 +446,8 @@ private fun HeroHeader(entry: DictEntry) {
     ) {
         Text(
             text = entry.char,
-            style = MaterialTheme.typography.displayLarge
+            style = MaterialTheme.typography.displayLarge,
+            fontFamily = HanziFontFamily
         )
         Column(
             modifier = Modifier.weight(1f)
