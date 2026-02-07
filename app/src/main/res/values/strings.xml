@@ -1,3 +1,12 @@
 <resources>
     <string name="app_name">NamingDict</string>
+    <string name="clear_all">Clear All</string>
+    <string name="clear_category">Clear Category</string>
+    <string name="selected_filters">Selected Filters</string>
+    <string name="results">Results: %1$d</string>
+    <string name="no_results">No entries match the current filters.</string>
+    <string name="loading">Loading dictionary...</string>
+    <string name="error_loading">Failed to load data.</string>
+    <string name="retry">Retry</string>
+    <string name="back">Back</string>
 </resources>
