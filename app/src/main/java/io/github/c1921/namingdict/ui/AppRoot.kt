@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -52,11 +54,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,6 +80,9 @@ import io.github.c1921.namingdict.R
 import io.github.c1921.namingdict.data.IndexCategory
 import io.github.c1921.namingdict.data.sortIndexValues
 import io.github.c1921.namingdict.data.model.DictEntry
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 
 private val HanziFontFamily = FontFamily.Serif
 
@@ -343,10 +351,31 @@ private fun FilterScreen(
     modifier: Modifier = Modifier
 ) {
     val selectedCategory = uiState.selectedCategory
-    val categoryValues = uiState.index[selectedCategory.key].orEmpty()
-    val sortedValues = remember(categoryValues, selectedCategory) {
-        sortIndexValues(categoryValues.keys, selectedCategory)
+    val pagerState = rememberPagerState(
+        initialPage = selectedCategory.ordinal,
+        pageCount = { IndexCategory.entries.size }
+    )
+    val latestSelectedCategory by rememberUpdatedState(selectedCategory)
+    val latestOnSelectCategory by rememberUpdatedState(onSelectCategory)
+
+    LaunchedEffect(selectedCategory.ordinal) {
+        if (pagerState.currentPage != selectedCategory.ordinal) {
+            pagerState.animateScrollToPage(selectedCategory.ordinal)
+        }
     }
+
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }
+            .distinctUntilChanged()
+            .filter { page -> page in IndexCategory.entries.indices }
+            .collect { page ->
+                val category = IndexCategory.entries[page]
+                if (category != latestSelectedCategory) {
+                    latestOnSelectCategory(category)
+                }
+            }
+    }
+
     val selectedPairs = remember(uiState.selectedValues) {
         uiState.selectedValues.entries
             .sortedBy { it.key.ordinal }
@@ -389,41 +418,56 @@ private fun FilterScreen(
             }
         }
 
-        Row(
+        HorizontalPager(
+            state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = selectedCategory.label,
-                style = MaterialTheme.typography.titleMedium
-            )
-            if (uiState.selectedValues[selectedCategory].orEmpty().isNotEmpty()) {
-                TextButton(onClick = { onClearCategory(selectedCategory) }) {
-                    Text(text = stringResource(R.string.clear_category))
-                }
+                .weight(1f)
+        ) { page ->
+            val category = IndexCategory.entries[page]
+            val categoryValues = uiState.index[category.key].orEmpty()
+            val sortedValues = remember(categoryValues, category) {
+                sortIndexValues(categoryValues.keys, category)
             }
-        }
 
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 96.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxSize()
-                .padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(bottom = 8.dp)
-        ) {
-            items(sortedValues, key = { it }) { value ->
-                val isSelected = uiState.selectedValues[selectedCategory].orEmpty().contains(value)
-                FilterChip(
-                    selected = isSelected,
-                    onClick = { onToggleValue(selectedCategory, value) },
-                    label = { Text(text = value) }
-                )
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = category.label,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    if (uiState.selectedValues[category].orEmpty().isNotEmpty()) {
+                        TextButton(onClick = { onClearCategory(category) }) {
+                            Text(text = stringResource(R.string.clear_category))
+                        }
+                    }
+                }
+
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 96.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(bottom = 8.dp)
+                ) {
+                    items(sortedValues, key = { it }) { value ->
+                        val isSelected = uiState.selectedValues[category].orEmpty().contains(value)
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { onToggleValue(category, value) },
+                            label = { Text(text = value) }
+                        )
+                    }
+                }
             }
         }
     }
