@@ -3,6 +3,7 @@ package io.github.c1921.namingdict.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -32,6 +33,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
@@ -48,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.c1921.namingdict.R
@@ -360,7 +363,7 @@ private fun DictDetailScreen(entry: DictEntry, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = entry.char) },
+                title = {},
                 navigationIcon = {
                     TextButton(onClick = onBack) {
                         Text(text = stringResource(R.string.back))
@@ -376,25 +379,18 @@ private fun DictDetailScreen(entry: DictEntry, onBack: () -> Unit) {
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            Text(text = entry.char, style = MaterialTheme.typography.displayLarge)
+            HeroHeader(entry = entry)
             Spacer(modifier = Modifier.height(16.dp))
 
-            DetailRow(label = stringResource(R.string.detail_pinyin), value = formatList(entry.phonetics.pinyin))
-            DetailRow(label = stringResource(R.string.detail_initials), value = formatList(entry.phonetics.initials))
-            DetailRow(label = stringResource(R.string.detail_finals), value = formatList(entry.phonetics.finals))
-            DetailRow(label = stringResource(R.string.detail_tones), value = formatIntList(entry.phonetics.tones))
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            DetailRow(label = stringResource(R.string.detail_radical), value = entry.structure.radical.ifBlank { "-" })
-            DetailRow(label = stringResource(R.string.detail_strokes_total), value = entry.structure.strokesTotal.toString())
-            DetailRow(label = stringResource(R.string.detail_strokes_other), value = entry.structure.strokesOther.toString())
-            DetailRow(label = stringResource(R.string.detail_structure_type), value = entry.structure.structureType.ifBlank { "-" })
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            DetailRow(label = stringResource(R.string.detail_unicode), value = entry.unicode.ifBlank { "-" })
-            DetailRow(label = stringResource(R.string.detail_gscc), value = entry.gscc.ifBlank { "-" })
+            val metaItems = listOf(
+                MetaItem(label = stringResource(R.string.detail_radical), value = entry.structure.radical.ifBlank { "-" }),
+                MetaItem(label = stringResource(R.string.detail_strokes_total), value = entry.structure.strokesTotal.toString()),
+                MetaItem(label = stringResource(R.string.detail_strokes_other), value = entry.structure.strokesOther.toString()),
+                MetaItem(label = stringResource(R.string.detail_structure_type), value = entry.structure.structureType.ifBlank { "-" }),
+                MetaItem(label = stringResource(R.string.detail_unicode), value = entry.unicode.ifBlank { "-" }),
+                MetaItem(label = stringResource(R.string.detail_gscc), value = entry.gscc.ifBlank { "-" })
+            )
+            MetaGrid(items = metaItems)
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -413,18 +409,100 @@ private fun DictDetailScreen(entry: DictEntry, onBack: () -> Unit) {
 }
 
 @Composable
-private fun DetailRow(label: String, value: String) {
-    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-        Text(text = label, style = MaterialTheme.typography.labelMedium)
-        Text(text = value, style = MaterialTheme.typography.bodyLarge)
+private fun HeroHeader(entry: DictEntry) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = entry.char,
+            style = MaterialTheme.typography.displayLarge
+        )
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = formatPinyinList(entry.phonetics.pinyin),
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
     }
 }
 
-private fun formatList(values: List<String>): String {
+private data class MetaItem(
+    val label: String,
+    val value: String
+)
+
+@Composable
+private fun MetaGrid(items: List<MetaItem>) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val isSingleColumn = maxWidth < 340.dp
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (isSingleColumn) {
+                items.forEach { item ->
+                    MetaCard(item = item, modifier = Modifier.fillMaxWidth())
+                }
+            } else {
+                items.chunked(2).forEach { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        MetaCard(
+                            item = rowItems[0],
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (rowItems.size == 2) {
+                            MetaCard(
+                                item = rowItems[1],
+                                modifier = Modifier.weight(1f)
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetaCard(
+    item: MetaItem,
+    modifier: Modifier = Modifier
+) {
+    OutlinedCard(modifier = modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = item.label, style = MaterialTheme.typography.labelMedium)
+            Text(
+                text = item.value,
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.End,
+                modifier = Modifier
+                    .padding(start = 12.dp)
+                    .weight(1f)
+            )
+        }
+    }
+}
+
+private fun formatPinyinList(values: List<String>): String {
     if (values.isEmpty()) {
         return "-"
     }
-    return values.joinToString(" ")
+    return values.joinToString("，")
 }
 
 private fun formatIntList(values: List<Int>): String {
