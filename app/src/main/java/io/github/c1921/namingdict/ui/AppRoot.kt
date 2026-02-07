@@ -20,15 +20,19 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -64,12 +68,22 @@ private val HanziFontFamily = FontFamily.Serif
 private enum class MainTab(val titleResId: Int) {
     Filter(R.string.tab_filter),
     Dictionary(R.string.tab_dictionary),
+    Favorites(R.string.tab_favorites),
     Settings(R.string.tab_settings)
 }
 
 @Composable
 fun AppRoot(viewModel: DictViewModel) {
     val uiState by viewModel.uiState.collectAsState()
+    var pendingUnfavoriteId by rememberSaveable { mutableStateOf<Int?>(null) }
+
+    val requestToggleFavorite: (Int) -> Unit = { id ->
+        if (uiState.favoriteIds.contains(id)) {
+            pendingUnfavoriteId = id
+        } else {
+            viewModel.toggleFavorite(id)
+        }
+    }
 
     when {
         uiState.isLoading -> LoadingScreen()
@@ -86,7 +100,12 @@ fun AppRoot(viewModel: DictViewModel) {
                     onRetry = viewModel::backToList
                 )
             } else {
-                DictDetailScreen(entry = entry, onBack = viewModel::backToList)
+                DictDetailScreen(
+                    entry = entry,
+                    isFavorited = uiState.favoriteIds.contains(entry.id),
+                    onToggleFavorite = { requestToggleFavorite(entry.id) },
+                    onBack = viewModel::backToList
+                )
             }
         }
 
@@ -96,7 +115,33 @@ fun AppRoot(viewModel: DictViewModel) {
             onToggleValue = viewModel::toggleValue,
             onClearCategory = viewModel::clearCategory,
             onClearAll = viewModel::clearAll,
+            onToggleFavorite = requestToggleFavorite,
             onSelectEntry = viewModel::selectEntry
+        )
+    }
+
+    pendingUnfavoriteId?.let { id ->
+        val entry = uiState.idToEntry[id]
+        val displayChar = entry?.char ?: "-"
+        AlertDialog(
+            onDismissRequest = { pendingUnfavoriteId = null },
+            title = { Text(text = stringResource(R.string.unfavorite_confirm_title)) },
+            text = { Text(text = stringResource(R.string.unfavorite_confirm_message, displayChar)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.toggleFavorite(id)
+                        pendingUnfavoriteId = null
+                    }
+                ) {
+                    Text(text = stringResource(R.string.confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingUnfavoriteId = null }) {
+                    Text(text = stringResource(R.string.cancel))
+                }
+            }
         )
     }
 }
@@ -133,6 +178,7 @@ private fun MainTabbedContent(
     onToggleValue: (IndexCategory, String) -> Unit,
     onClearCategory: (IndexCategory) -> Unit,
     onClearAll: () -> Unit,
+    onToggleFavorite: (Int) -> Unit,
     onSelectEntry: (Int) -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.Dictionary) }
@@ -171,6 +217,7 @@ private fun MainTabbedContent(
                             val icon = when (tab) {
                                 MainTab.Filter -> Icons.Outlined.FilterList
                                 MainTab.Dictionary -> Icons.AutoMirrored.Outlined.MenuBook
+                                MainTab.Favorites -> Icons.Outlined.StarBorder
                                 MainTab.Settings -> Icons.Outlined.Settings
                             }
                             Icon(
@@ -195,6 +242,14 @@ private fun MainTabbedContent(
 
             MainTab.Dictionary -> DictionaryScreen(
                 uiState = uiState,
+                onToggleFavorite = onToggleFavorite,
+                onSelectEntry = onSelectEntry,
+                modifier = Modifier.padding(innerPadding)
+            )
+
+            MainTab.Favorites -> FavoritesScreen(
+                uiState = uiState,
+                onToggleFavorite = onToggleFavorite,
                 onSelectEntry = onSelectEntry,
                 modifier = Modifier.padding(innerPadding)
             )
@@ -304,6 +359,7 @@ private fun FilterScreen(
 @Composable
 private fun DictionaryScreen(
     uiState: UiState,
+    onToggleFavorite: (Int) -> Unit,
     onSelectEntry: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -325,9 +381,41 @@ private fun DictionaryScreen(
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(uiState.filteredEntries.size, key = { uiState.filteredEntries[it].id }) { index ->
                     val entry = uiState.filteredEntries[index]
-                    DictListItem(entry = entry, onClick = { onSelectEntry(entry.id) })
+                    DictListItem(
+                        entry = entry,
+                        isFavorited = uiState.favoriteIds.contains(entry.id),
+                        onToggleFavorite = { onToggleFavorite(entry.id) },
+                        onClick = { onSelectEntry(entry.id) }
+                    )
                     HorizontalDivider()
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FavoritesScreen(
+    uiState: UiState,
+    onToggleFavorite: (Int) -> Unit,
+    onSelectEntry: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (uiState.favoriteEntries.isEmpty()) {
+        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(text = stringResource(R.string.favorites_empty))
+        }
+    } else {
+        LazyColumn(modifier = modifier.fillMaxSize()) {
+            items(uiState.favoriteEntries.size, key = { uiState.favoriteEntries[it].id }) { index ->
+                val entry = uiState.favoriteEntries[index]
+                DictListItem(
+                    entry = entry,
+                    isFavorited = true,
+                    onToggleFavorite = { onToggleFavorite(entry.id) },
+                    onClick = { onSelectEntry(entry.id) }
+                )
+                HorizontalDivider()
             }
         }
     }
@@ -347,7 +435,12 @@ private fun SettingsScreen(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun DictListItem(entry: DictEntry, onClick: () -> Unit) {
+private fun DictListItem(
+    entry: DictEntry,
+    isFavorited: Boolean,
+    onToggleFavorite: () -> Unit,
+    onClick: () -> Unit
+) {
     val pinyin = formatPinyinList(entry.phonetics.pinyin)
     val definition = entry.definitions.firstOrNull().orEmpty().ifBlank { "-" }
     ListItem(
@@ -379,6 +472,16 @@ private fun DictListItem(entry: DictEntry, onClick: () -> Unit) {
                 overflow = TextOverflow.Ellipsis
             )
         },
+        trailingContent = {
+            IconButton(onClick = onToggleFavorite) {
+                Icon(
+                    imageVector = if (isFavorited) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                    contentDescription = stringResource(
+                        if (isFavorited) R.string.favorite_remove else R.string.favorite_add
+                    )
+                )
+            }
+        },
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
@@ -388,7 +491,12 @@ private fun DictListItem(entry: DictEntry, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DictDetailScreen(entry: DictEntry, onBack: () -> Unit) {
+private fun DictDetailScreen(
+    entry: DictEntry,
+    isFavorited: Boolean,
+    onToggleFavorite: () -> Unit,
+    onBack: () -> Unit
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -396,6 +504,16 @@ private fun DictDetailScreen(entry: DictEntry, onBack: () -> Unit) {
                 navigationIcon = {
                     TextButton(onClick = onBack) {
                         Text(text = stringResource(R.string.back))
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onToggleFavorite) {
+                        Icon(
+                            imageVector = if (isFavorited) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                            contentDescription = stringResource(
+                                if (isFavorited) R.string.favorite_remove else R.string.favorite_add
+                            )
+                        )
                     }
                 }
             )

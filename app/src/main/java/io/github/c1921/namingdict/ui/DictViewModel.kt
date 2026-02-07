@@ -23,6 +23,8 @@ data class UiState(
     val selectedValues: Map<IndexCategory, Set<String>> = emptyMap(),
     val filteredIds: Set<Int> = emptySet(),
     val filteredEntries: List<DictEntry> = emptyList(),
+    val favoriteIds: Set<Int> = emptySet(),
+    val favoriteEntries: List<DictEntry> = emptyList(),
     val selectedEntryId: Int? = null
 )
 
@@ -34,6 +36,7 @@ class DictViewModel(private val repository: DictionaryRepository) : ViewModel() 
     private var index: Map<String, Map<String, List<Int>>> = emptyMap()
     private var idToEntry: Map<Int, DictEntry> = emptyMap()
     private var allIds: Set<Int> = emptySet()
+    private var favoriteOrder: List<Int> = emptyList()
 
     init {
         load()
@@ -80,6 +83,26 @@ class DictViewModel(private val repository: DictionaryRepository) : ViewModel() 
         recomputeFilters(emptyMap())
     }
 
+    fun toggleFavorite(id: Int) {
+        val current = _uiState.value
+        val isFavorited = current.favoriteIds.contains(id)
+        val newFavoriteIds = if (isFavorited) {
+            current.favoriteIds - id
+        } else {
+            current.favoriteIds + id
+        }
+        favoriteOrder = if (isFavorited) {
+            favoriteOrder.filterNot { it == id }
+        } else {
+            listOf(id) + favoriteOrder.filterNot { it == id }
+        }
+        val newFavoriteEntries = favoriteOrder.mapNotNull { favoriteId -> idToEntry[favoriteId] }
+        _uiState.value = current.copy(
+            favoriteIds = newFavoriteIds,
+            favoriteEntries = newFavoriteEntries
+        )
+    }
+
     fun selectEntry(id: Int) {
         _uiState.value = _uiState.value.copy(selectedEntryId = id)
     }
@@ -97,6 +120,9 @@ class DictViewModel(private val repository: DictionaryRepository) : ViewModel() 
                 index = data.index
                 idToEntry = entries.associateBy { it.id }
                 allIds = entries.map { it.id }.toSet()
+                favoriteOrder = favoriteOrder.filter { idToEntry.containsKey(it) }
+                val favoriteIds = favoriteOrder.toSet()
+                val favoriteEntries = favoriteOrder.mapNotNull { favoriteId -> idToEntry[favoriteId] }
                 val sortedEntries = entries.sortedBy { it.id }
                 _uiState.value = UiState(
                     isLoading = false,
@@ -104,7 +130,9 @@ class DictViewModel(private val repository: DictionaryRepository) : ViewModel() 
                     index = index,
                     idToEntry = idToEntry,
                     filteredIds = allIds,
-                    filteredEntries = sortedEntries
+                    filteredEntries = sortedEntries,
+                    favoriteIds = favoriteIds,
+                    favoriteEntries = favoriteEntries
                 )
             } catch (ex: Exception) {
                 _uiState.value = UiState(
