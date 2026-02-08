@@ -3,6 +3,7 @@ package io.github.c1921.namingdict.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,8 +29,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import io.github.c1921.namingdict.R
+import io.github.c1921.namingdict.ui.theme.AppTheme
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.debounce
@@ -54,6 +55,7 @@ internal fun DictionaryScreen(
     onPersistFavoritesScrollState: (Int?, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val spacing = AppTheme.spacing
     val dictionaryEntries = uiState.filteredEntries
     val favoritesEntries = uiState.favoriteEntries
     val displayEntries = if (showFavoritesOnly) favoritesEntries else dictionaryEntries
@@ -127,32 +129,35 @@ internal fun DictionaryScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = spacing.large, vertical = spacing.small),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = stringResource(R.string.results, displayEntries.size),
-                style = MaterialTheme.typography.titleSmall
+                style = MaterialTheme.typography.titleMedium
             )
             DictionaryModeControl(
                 showFavoritesOnly = showFavoritesOnly,
                 onSetShowFavoritesOnly = onSetShowFavoritesOnly
             )
         }
-        HorizontalDivider()
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         if (displayEntries.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
                     text = stringResource(
                         if (showFavoritesOnly) R.string.favorites_empty else R.string.no_results
-                    )
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(vertical = spacing.extraSmall),
                 state = activeListState
             ) {
                 items(displayEntries.size, key = { displayEntries[it].id }) { index ->
@@ -182,7 +187,7 @@ internal fun DictionaryScreen(
                             onSelectEntry(entry.id)
                         }
                     )
-                    HorizontalDivider()
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
         }

@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import io.github.c1921.namingdict.R
 import io.github.c1921.namingdict.data.IndexCategory
 import io.github.c1921.namingdict.data.sortIndexValues
+import io.github.c1921.namingdict.ui.theme.AppTheme
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -45,6 +46,7 @@ internal fun FilterScreen(
     onClearCategory: (IndexCategory) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val spacing = AppTheme.spacing
     val selectedCategory = uiState.selectedCategory
     val pagerState = rememberPagerState(
         initialPage = selectedCategory.ordinal,
@@ -82,7 +84,11 @@ internal fun FilterScreen(
     Column(
         modifier = modifier.fillMaxSize()
     ) {
-        ScrollableTabRow(selectedTabIndex = selectedCategory.ordinal) {
+        ScrollableTabRow(
+            selectedTabIndex = selectedCategory.ordinal,
+            edgePadding = spacing.medium,
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
             IndexCategory.entries.forEach { category ->
                 Tab(
                     selected = category == selectedCategory,
@@ -96,11 +102,11 @@ internal fun FilterScreen(
             Text(
                 text = stringResource(R.string.selected_filters),
                 style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                modifier = Modifier.padding(horizontal = spacing.large, vertical = spacing.small)
             )
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                contentPadding = PaddingValues(horizontal = spacing.medium, vertical = spacing.extraSmall),
+                horizontalArrangement = Arrangement.spacedBy(spacing.small)
             ) {
                 items(selectedPairs.size) { index ->
                     val (category, value) = selectedPairs[index]
@@ -108,6 +114,7 @@ internal fun FilterScreen(
                     FilterChip(
                         selected = true,
                         onClick = { onToggleValue(category, value) },
+                        shape = MaterialTheme.shapes.large,
                         label = { Text(text = "${category.label}: $displayValue") }
                     )
                 }
@@ -130,7 +137,7 @@ internal fun FilterScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .padding(horizontal = spacing.large, vertical = spacing.small),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -150,10 +157,10 @@ internal fun FilterScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillMaxSize()
-                        .padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(bottom = 8.dp)
+                        .padding(horizontal = spacing.medium),
+                    horizontalArrangement = Arrangement.spacedBy(spacing.small),
+                    verticalArrangement = Arrangement.spacedBy(spacing.small),
+                    contentPadding = PaddingValues(bottom = spacing.small)
                 ) {
                     items(sortedValues, key = { it }) { value ->
                         val displayValue = displayFilterValue(category = category, value = value)
@@ -161,6 +168,7 @@ internal fun FilterScreen(
                         FilterChip(
                             selected = isSelected,
                             onClick = { onToggleValue(category, value) },
+                            shape = MaterialTheme.shapes.large,
                             label = { Text(text = displayValue) }
                         )
                     }

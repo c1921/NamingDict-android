@@ -18,11 +18,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -41,12 +42,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import io.github.c1921.namingdict.R
 import io.github.c1921.namingdict.data.model.DictEntry
 import io.github.c1921.namingdict.data.model.GivenNameMode
 import io.github.c1921.namingdict.data.model.NamingGender
 import io.github.c1921.namingdict.data.model.NamingScheme
+import io.github.c1921.namingdict.ui.theme.AppTheme
 
 private const val SCHEME_WARNING_THRESHOLD = 50
 private const val SURNAME_MAX_CODE_POINTS = 4
@@ -64,6 +65,7 @@ internal fun NameComposerScreen(
     onFillActiveSlotFromFavorite: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val spacing = AppTheme.spacing
     var showSurnameDialog by rememberSaveable { mutableStateOf(false) }
     var surnameDraft by rememberSaveable { mutableStateOf("") }
     var editingSchemeId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -141,16 +143,19 @@ internal fun NameComposerScreen(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        OutlinedCard(
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = spacing.medium, vertical = spacing.small),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            )
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(spacing.medium),
+                verticalArrangement = Arrangement.spacedBy(spacing.small)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -186,7 +191,7 @@ internal fun NameComposerScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 4.dp),
+                .padding(horizontal = spacing.medium, vertical = spacing.extraSmall),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -205,7 +210,7 @@ internal fun NameComposerScreen(
                 Icon(
                     imageVector = Icons.Filled.Add,
                     contentDescription = null,
-                    modifier = Modifier.padding(end = 6.dp)
+                    modifier = Modifier.padding(end = spacing.small)
                 )
                 Text(text = stringResource(R.string.naming_add_scheme))
             }
@@ -216,7 +221,10 @@ internal fun NameComposerScreen(
                 text = stringResource(R.string.naming_scheme_count_warning, SCHEME_WARNING_THRESHOLD),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+                modifier = Modifier.padding(
+                    horizontal = spacing.medium,
+                    vertical = spacing.extraSmall
+                )
             )
         }
 
@@ -237,8 +245,8 @@ internal fun NameComposerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                contentPadding = PaddingValues(horizontal = spacing.medium, vertical = spacing.small),
+                verticalArrangement = Arrangement.spacedBy(spacing.small)
             ) {
                 itemsIndexed(
                     items = uiState.namingSchemes,
@@ -457,15 +465,19 @@ private fun SchemeRowItem(
     onEdit: () -> Unit,
     onRemove: () -> Unit
 ) {
-    OutlinedCard(
+    val spacing = AppTheme.spacing
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onEdit)
+            .clickable(onClick = onEdit),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = spacing.medium, vertical = spacing.small),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -481,7 +493,7 @@ private fun SchemeRowItem(
                 text = genderLabel,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 8.dp)
+                modifier = Modifier.padding(horizontal = spacing.small)
             )
             IconButton(onClick = onRemove) {
                 Icon(
@@ -508,6 +520,7 @@ private fun SchemeEditorDialog(
     onUpdateNamingSlotText: (Int, String) -> Unit,
     onSelectFavoriteChar: (String, Int) -> Unit
 ) {
+    val spacing = AppTheme.spacing
     var slot1Focused by rememberSaveable(scheme.id) { mutableStateOf(false) }
     var slot2Focused by rememberSaveable(scheme.id) { mutableStateOf(false) }
 
@@ -529,7 +542,7 @@ private fun SchemeEditorDialog(
             Text(text = titleText)
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(spacing.medium)) {
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                     SegmentedButton(
                         selected = scheme.givenNameMode == GivenNameMode.Single,
@@ -577,7 +590,7 @@ private fun SchemeEditorDialog(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(spacing.small)
                 ) {
                     OutlinedTextField(
                         value = scheme.slot1,
@@ -635,7 +648,7 @@ private fun SchemeEditorDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(spacing.small)) {
                             items(items = favoriteEntries, key = { entry -> entry.id }) { entry ->
                                 SuggestionChip(
                                     onClick = {

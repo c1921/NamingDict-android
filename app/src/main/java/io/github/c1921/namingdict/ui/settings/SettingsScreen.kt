@@ -16,10 +16,10 @@ import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -29,14 +29,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.unit.dp
 import io.github.c1921.namingdict.BuildConfig
 import io.github.c1921.namingdict.R
+import io.github.c1921.namingdict.ui.theme.AppTheme
 
 @Composable
 internal fun SettingsScreen(
@@ -72,27 +73,35 @@ private fun SettingsHomeScreen(
     onOpenAbout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val spacing = AppTheme.spacing
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(vertical = 8.dp)
+            .padding(horizontal = spacing.small, vertical = spacing.small),
+        verticalArrangement = Arrangement.spacedBy(spacing.extraSmall)
     ) {
         ListItem(
+            colors = ListItemDefaults.colors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            ),
             headlineContent = { Text(text = stringResource(R.string.settings_entry_backup_restore)) },
             supportingContent = { Text(text = stringResource(R.string.settings_entry_backup_restore_desc)) },
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(MaterialTheme.shapes.medium)
                 .clickable(onClick = onOpenBackupRestore)
         )
-        HorizontalDivider()
         ListItem(
+            colors = ListItemDefaults.colors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            ),
             headlineContent = { Text(text = stringResource(R.string.settings_entry_about)) },
             supportingContent = { Text(text = stringResource(R.string.settings_entry_about_desc)) },
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(MaterialTheme.shapes.medium)
                 .clickable(onClick = onOpenAbout)
         )
-        HorizontalDivider()
     }
 }
 
@@ -104,6 +113,7 @@ private fun SettingsBackupRestoreScreen(
     onManualDownloadFavorites: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val spacing = AppTheme.spacing
     val webDavConfig = uiState.webDavConfig
     var serverUrl by rememberSaveable(webDavConfig.serverUrl) { mutableStateOf(webDavConfig.serverUrl) }
     var username by rememberSaveable(webDavConfig.username) { mutableStateOf(webDavConfig.username) }
@@ -114,12 +124,12 @@ private fun SettingsBackupRestoreScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(spacing.large),
+        verticalArrangement = Arrangement.spacedBy(spacing.medium)
     ) {
         Text(
             text = stringResource(R.string.settings_webdav_title),
-            style = MaterialTheme.typography.titleMedium
+            style = MaterialTheme.typography.titleLarge
         )
         OutlinedTextField(
             value = serverUrl,
@@ -188,7 +198,7 @@ private fun SettingsBackupRestoreScreen(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(spacing.small)
         ) {
             Button(
                 onClick = onManualUploadFavorites,
@@ -216,7 +226,7 @@ private fun SettingsBackupRestoreScreen(
 
         Text(
             text = stringResource(R.string.settings_webdav_sync_status),
-            style = MaterialTheme.typography.titleSmall
+            style = MaterialTheme.typography.titleMedium
         )
         if (uiState.syncInProgress) {
             Text(
@@ -240,6 +250,7 @@ private fun SettingsBackupRestoreScreen(
 private fun SettingsAboutScreen(
     modifier: Modifier = Modifier
 ) {
+    val spacing = AppTheme.spacing
     val uriHandler = LocalUriHandler.current
     val licenseUrl = stringResource(R.string.settings_about_license_url)
     val githubUrl = stringResource(R.string.settings_about_github_url)
@@ -247,9 +258,9 @@ private fun SettingsAboutScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(spacing.large)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(spacing.medium)) {
             Text(
                 text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.titleLarge
@@ -267,6 +278,9 @@ private fun SettingsAboutScreen(
         }
         Spacer(modifier = Modifier.weight(1f))
         ListItem(
+            colors = ListItemDefaults.colors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            ),
             headlineContent = { Text(text = stringResource(R.string.settings_about_license_title)) },
             supportingContent = { Text(text = stringResource(R.string.settings_about_license_value)) },
             trailingContent = {
@@ -278,11 +292,15 @@ private fun SettingsAboutScreen(
             },
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(MaterialTheme.shapes.medium)
                 .clickable {
                     uriHandler.openUri(licenseUrl)
                 }
         )
         ListItem(
+            colors = ListItemDefaults.colors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            ),
             headlineContent = { Text(text = stringResource(R.string.settings_about_github_title)) },
             supportingContent = { Text(text = stringResource(R.string.settings_about_github_value)) },
             trailingContent = {
@@ -294,6 +312,7 @@ private fun SettingsAboutScreen(
             },
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(MaterialTheme.shapes.medium)
                 .clickable {
                     uriHandler.openUri(githubUrl)
                 }

@@ -10,6 +10,7 @@ import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,9 +18,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import io.github.c1921.namingdict.R
 import io.github.c1921.namingdict.data.model.DictEntry
+import io.github.c1921.namingdict.ui.theme.AppTheme
 
 @Composable
 internal fun DictListItem(
@@ -28,9 +29,16 @@ internal fun DictListItem(
     onToggleFavorite: () -> Unit,
     onClick: () -> Unit
 ) {
+    val spacing = AppTheme.spacing
     val pinyin = formatPinyinList(entry.phonetics.pinyin)
     val definition = entry.definitions.firstOrNull().orEmpty().ifBlank { "-" }
     ListItem(
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            headlineColor = MaterialTheme.colorScheme.onSurface,
+            supportingColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            trailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+        ),
         headlineContent = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -38,23 +46,24 @@ internal fun DictListItem(
             ) {
                 Text(
                     text = entry.char,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.headlineSmall,
                     fontFamily = HanziFontFamily
                 )
                 Text(
                     text = pinyin,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .padding(start = 8.dp)
+                        .padding(start = spacing.small)
                 )
             }
         },
         supportingContent = {
             Text(
                 text = definition,
+                style = MaterialTheme.typography.bodyMedium,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -72,6 +81,6 @@ internal fun DictListItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .padding(horizontal = spacing.small, vertical = spacing.extraSmall)
     )
 }

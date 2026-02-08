@@ -24,6 +24,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +40,7 @@ import io.github.c1921.namingdict.R
 import io.github.c1921.namingdict.data.IndexCategory
 import io.github.c1921.namingdict.data.model.GivenNameMode
 import io.github.c1921.namingdict.data.model.NamingGender
+import io.github.c1921.namingdict.ui.theme.AppTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,6 +74,7 @@ internal fun MainTabbedContent(
     dictionarySearchErrorResId: Int?,
     onDictionarySearchErrorResIdChange: (Int?) -> Unit
 ) {
+    val spacing = AppTheme.spacing
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.Dictionary) }
     var settingsPage by rememberSaveable { mutableStateOf(SettingsPage.Home) }
     val charToEntryId = remember(uiState.entries) {
@@ -104,8 +107,15 @@ internal fun MainTabbedContent(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
                 title = {
                     val titleResId = if (selectedTab == MainTab.Settings) {
                         settingsPage.titleResId
@@ -132,7 +142,7 @@ internal fun MainTabbedContent(
                                 uiState.filteredEntries.size
                             ),
                             style = MaterialTheme.typography.labelLarge,
-                            modifier = Modifier.padding(end = 8.dp)
+                            modifier = Modifier.padding(end = spacing.small)
                         )
                     }
                     if (selectedTab == MainTab.Dictionary) {
@@ -157,7 +167,10 @@ internal fun MainTabbedContent(
             )
         },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                tonalElevation = 0.dp
+            ) {
                 MainTab.entries.forEach { tab ->
                     NavigationBarItem(
                         selected = tab == selectedTab,
