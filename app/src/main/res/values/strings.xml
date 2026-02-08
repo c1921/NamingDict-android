@@ -30,6 +30,13 @@
     <string name="new_feature_placeholder">新功能开发中</string>
     <string name="dictionary_mode_filtered">筛选</string>
     <string name="dictionary_mode_favorites">收藏</string>
+    <string name="dictionary_search_open">打开搜索</string>
+    <string name="dictionary_search_title">搜索</string>
+    <string name="dictionary_search_hint">输入一个字</string>
+    <string name="dictionary_search_action">搜索</string>
+    <string name="dictionary_search_cancel">取消</string>
+    <string name="dictionary_search_error_single_char">仅支持输入单个字</string>
+    <string name="dictionary_search_error_not_found">未收录该字</string>
     <string name="loading">正在加载字典...</string>
     <string name="error_loading">数据加载失败</string>
     <string name="retry">重试</string>

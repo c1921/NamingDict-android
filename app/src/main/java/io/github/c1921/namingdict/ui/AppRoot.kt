@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -69,7 +70,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.foundation.text.KeyboardOptions
@@ -111,6 +114,10 @@ private enum class SettingsPage(val titleResId: Int) {
 fun AppRoot(viewModel: DictViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     var pendingUnfavoriteId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var showDictionarySearchDialog by rememberSaveable { mutableStateOf(false) }
+    var dictionarySearchQuery by rememberSaveable { mutableStateOf("") }
+    var dictionarySearchErrorResId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var reopenDictionarySearchDialogOnBack by rememberSaveable { mutableStateOf(false) }
 
     val requestToggleFavorite: (Int) -> Unit = { id ->
         if (uiState.favoriteIds.contains(id)) {
@@ -118,6 +125,15 @@ fun AppRoot(viewModel: DictViewModel) {
         } else {
             viewModel.toggleFavorite(id)
         }
+    }
+    val selectEntryFromList: (Int) -> Unit = { id ->
+        reopenDictionarySearchDialogOnBack = false
+        viewModel.selectEntry(id)
+    }
+    val selectEntryFromSearch: (Int) -> Unit = { id ->
+        showDictionarySearchDialog = false
+        reopenDictionarySearchDialogOnBack = true
+        viewModel.selectEntry(id)
     }
 
     when {
@@ -139,7 +155,15 @@ fun AppRoot(viewModel: DictViewModel) {
                     entry = entry,
                     isFavorited = uiState.favoriteIds.contains(entry.id),
                     onToggleFavorite = { requestToggleFavorite(entry.id) },
-                    onBack = viewModel::backToList
+                    onBack = {
+                        viewModel.backToList()
+                        if (reopenDictionarySearchDialogOnBack) {
+                            dictionarySearchQuery = ""
+                            dictionarySearchErrorResId = null
+                            showDictionarySearchDialog = true
+                            reopenDictionarySearchDialogOnBack = false
+                        }
+                    }
                 )
             }
         }
@@ -154,10 +178,17 @@ fun AppRoot(viewModel: DictViewModel) {
             onManualUploadFavorites = viewModel::manualUploadFavorites,
             onManualDownloadFavorites = viewModel::manualDownloadFavoritesOverwriteLocal,
             onToggleFavorite = requestToggleFavorite,
-            onSelectEntry = viewModel::selectEntry,
+            onSelectEntry = selectEntryFromList,
+            onSelectEntryFromSearch = selectEntryFromSearch,
             onPersistDictionaryScrollState = viewModel::persistDictionaryScrollState,
             onSetDictionaryShowFavoritesOnly = viewModel::setDictionaryShowFavoritesOnly,
-            onPersistDictionaryFavoritesScrollState = viewModel::persistDictionaryFavoritesScrollState
+            onPersistDictionaryFavoritesScrollState = viewModel::persistDictionaryFavoritesScrollState,
+            showDictionarySearchDialog = showDictionarySearchDialog,
+            onShowDictionarySearchDialogChange = { showDictionarySearchDialog = it },
+            dictionarySearchQuery = dictionarySearchQuery,
+            onDictionarySearchQueryChange = { dictionarySearchQuery = it },
+            dictionarySearchErrorResId = dictionarySearchErrorResId,
+            onDictionarySearchErrorResIdChange = { dictionarySearchErrorResId = it }
         )
     }
 
@@ -237,14 +268,43 @@ private fun MainTabbedContent(
     onManualDownloadFavorites: () -> Unit,
     onToggleFavorite: (Int) -> Unit,
     onSelectEntry: (Int) -> Unit,
+    onSelectEntryFromSearch: (Int) -> Unit,
     onPersistDictionaryScrollState: (Int?, Int) -> Unit,
     onSetDictionaryShowFavoritesOnly: (Boolean) -> Unit,
-    onPersistDictionaryFavoritesScrollState: (Int?, Int) -> Unit
+    onPersistDictionaryFavoritesScrollState: (Int?, Int) -> Unit,
+    showDictionarySearchDialog: Boolean,
+    onShowDictionarySearchDialogChange: (Boolean) -> Unit,
+    dictionarySearchQuery: String,
+    onDictionarySearchQueryChange: (String) -> Unit,
+    dictionarySearchErrorResId: Int?,
+    onDictionarySearchErrorResIdChange: (Int?) -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.Dictionary) }
     var settingsPage by rememberSaveable { mutableStateOf(SettingsPage.Home) }
+    val charToEntryId = remember(uiState.entries) {
+        uiState.entries.associate { entry -> entry.char to entry.id }
+    }
     val showClearAll = selectedTab == MainTab.Filter && uiState.selectedValues.values.any { it.isNotEmpty() }
     val isSettingsSubPage = selectedTab == MainTab.Settings && settingsPage != SettingsPage.Home
+    val submitDictionarySearch: () -> Unit = {
+        val normalized = dictionarySearchQuery.trim()
+        val codePointCount = normalized.codePointCount(0, normalized.length)
+        when {
+            codePointCount != 1 -> {
+                onDictionarySearchErrorResIdChange(R.string.dictionary_search_error_single_char)
+            }
+
+            else -> {
+                val entryId = charToEntryId[normalized]
+                if (entryId == null) {
+                    onDictionarySearchErrorResIdChange(R.string.dictionary_search_error_not_found)
+                } else {
+                    onDictionarySearchErrorResIdChange(null)
+                    onSelectEntryFromSearch(entryId)
+                }
+            }
+        }
+    }
 
     BackHandler(enabled = isSettingsSubPage) {
         settingsPage = SettingsPage.Home
@@ -281,6 +341,19 @@ private fun MainTabbedContent(
                             style = MaterialTheme.typography.labelLarge,
                             modifier = Modifier.padding(end = 8.dp)
                         )
+                    }
+                    if (selectedTab == MainTab.Dictionary) {
+                        IconButton(
+                            onClick = {
+                                onShowDictionarySearchDialogChange(true)
+                                onDictionarySearchErrorResIdChange(null)
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Search,
+                                contentDescription = stringResource(R.string.dictionary_search_open)
+                            )
+                        }
                     }
                     if (showClearAll) {
                         TextButton(onClick = onClearAll) {
@@ -356,6 +429,52 @@ private fun MainTabbedContent(
                 modifier = Modifier.padding(innerPadding)
             )
         }
+    }
+
+    if (showDictionarySearchDialog) {
+        AlertDialog(
+            onDismissRequest = { onShowDictionarySearchDialogChange(false) },
+            title = { Text(text = stringResource(R.string.dictionary_search_title)) },
+            text = {
+                OutlinedTextField(
+                    value = dictionarySearchQuery,
+                    onValueChange = { value ->
+                        onDictionarySearchQueryChange(value)
+                        if (dictionarySearchErrorResId != null) {
+                            onDictionarySearchErrorResIdChange(null)
+                        }
+                    },
+                    placeholder = {
+                        Text(text = stringResource(R.string.dictionary_search_hint))
+                    },
+                    singleLine = true,
+                    isError = dictionarySearchErrorResId != null,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Search
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onSearch = { submitDictionarySearch() }
+                    ),
+                    supportingText = {
+                        dictionarySearchErrorResId?.let { errorResId ->
+                            Text(text = stringResource(errorResId))
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = submitDictionarySearch) {
+                    Text(text = stringResource(R.string.dictionary_search_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { onShowDictionarySearchDialogChange(false) }) {
+                    Text(text = stringResource(R.string.dictionary_search_cancel))
+                }
+            }
+        )
     }
 }
 
