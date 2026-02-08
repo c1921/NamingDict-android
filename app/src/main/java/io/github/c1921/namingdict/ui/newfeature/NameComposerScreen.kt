@@ -65,17 +65,38 @@ internal fun NameComposerScreen(
     var showSurnameDialog by rememberSaveable { mutableStateOf(false) }
     var surnameDraft by rememberSaveable { mutableStateOf("") }
     var editingSchemeId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var editingOpenedFromAdd by rememberSaveable { mutableStateOf(false) }
+    var editingSnapshotMode by rememberSaveable { mutableStateOf(GivenNameMode.Double) }
+    var editingSnapshotSlot1 by rememberSaveable { mutableStateOf("") }
+    var editingSnapshotSlot2 by rememberSaveable { mutableStateOf("") }
+    var preEditActiveSchemeId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var preEditActiveSlotIndex by rememberSaveable { mutableStateOf(0) }
     var pendingOpenNewSchemeEditor by rememberSaveable { mutableStateOf(false) }
+    var pendingPreEditActiveSchemeId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pendingPreEditActiveSlotIndex by rememberSaveable { mutableStateOf(0) }
 
     val surnameDisplay = uiState.namingSurname.ifBlank {
         stringResource(R.string.naming_surname_not_set)
     }
     val editingScheme = uiState.namingSchemes.firstOrNull { it.id == editingSchemeId }
-    val editingSchemeIndex = uiState.namingSchemes.indexOfFirst { it.id == editingSchemeId }
+    val closeEditorSession: () -> Unit = {
+        editingSchemeId = null
+        editingOpenedFromAdd = false
+    }
+    val openEditorSession: (NamingScheme, Boolean, Long?, Int) -> Unit =
+        { scheme, openedFromAdd, activeSchemeId, activeSlotIndex ->
+            editingSchemeId = scheme.id
+            editingOpenedFromAdd = openedFromAdd
+            editingSnapshotMode = scheme.givenNameMode
+            editingSnapshotSlot1 = scheme.slot1
+            editingSnapshotSlot2 = scheme.slot2
+            preEditActiveSchemeId = activeSchemeId
+            preEditActiveSlotIndex = activeSlotIndex.coerceIn(0, 1)
+        }
 
     LaunchedEffect(editingSchemeId, uiState.namingSchemes) {
         if (editingSchemeId != null && editingScheme == null) {
-            editingSchemeId = null
+            closeEditorSession()
         }
     }
 
@@ -88,12 +109,19 @@ internal fun NameComposerScreen(
             return@LaunchedEffect
         }
         val activeSchemeId = uiState.namingActiveSchemeId
-        if (
-            activeSchemeId != null &&
-            uiState.namingSchemes.any { scheme -> scheme.id == activeSchemeId }
-        ) {
-            editingSchemeId = activeSchemeId
+        val activeScheme = activeSchemeId?.let { id ->
+            uiState.namingSchemes.firstOrNull { scheme -> scheme.id == id }
+        }
+        if (activeScheme != null) {
+            openEditorSession(
+                activeScheme,
+                true,
+                pendingPreEditActiveSchemeId,
+                pendingPreEditActiveSlotIndex
+            )
             pendingOpenNewSchemeEditor = false
+            pendingPreEditActiveSchemeId = null
+            pendingPreEditActiveSlotIndex = 0
         }
     }
 
@@ -153,6 +181,8 @@ internal fun NameComposerScreen(
             )
             Button(
                 onClick = {
+                    pendingPreEditActiveSchemeId = uiState.namingActiveSchemeId
+                    pendingPreEditActiveSlotIndex = uiState.namingActiveSlotIndex.coerceIn(0, 1)
                     pendingOpenNewSchemeEditor = true
                     onAddNamingScheme()
                 }
@@ -198,7 +228,7 @@ internal fun NameComposerScreen(
                 itemsIndexed(
                     items = uiState.namingSchemes,
                     key = { _, item -> item.id }
-                ) { index, scheme ->
+                ) { _, scheme ->
                     val previewText = formatSchemePreview(
                         surname = uiState.namingSurname,
                         scheme = scheme,
@@ -206,10 +236,17 @@ internal fun NameComposerScreen(
                     )
                     SchemeRowItem(
                         previewText = previewText,
-                        onEdit = { editingSchemeId = scheme.id },
+                        onEdit = {
+                            openEditorSession(
+                                scheme,
+                                false,
+                                uiState.namingActiveSchemeId,
+                                uiState.namingActiveSlotIndex
+                            )
+                        },
                         onRemove = {
                             if (editingSchemeId == scheme.id) {
-                                editingSchemeId = null
+                                closeEditorSession()
                             }
                             onRemoveNamingScheme(scheme.id)
                         }
@@ -262,12 +299,33 @@ internal fun NameComposerScreen(
         )
     }
 
-    if (editingScheme != null && editingSchemeIndex >= 0) {
+    if (editingScheme != null) {
+        val editingTitle = formatSchemePreview(
+            surname = uiState.namingSurname,
+            scheme = editingScheme,
+            placeholder = stringResource(R.string.naming_preview_row_placeholder)
+        )
+        val onCancelEdit: () -> Unit = {
+            val editingId = editingScheme.id
+            if (editingOpenedFromAdd) {
+                onRemoveNamingScheme(editingId)
+            } else {
+                onSetNamingMode(editingId, editingSnapshotMode)
+                onUpdateNamingSlotText(editingId, 0, editingSnapshotSlot1)
+                onUpdateNamingSlotText(editingId, 1, editingSnapshotSlot2)
+            }
+            preEditActiveSchemeId?.let { activeSchemeId ->
+                onSetActiveNamingSlot(activeSchemeId, preEditActiveSlotIndex)
+            }
+            closeEditorSession()
+        }
         SchemeEditorDialog(
-            schemeIndex = editingSchemeIndex,
+            titleText = editingTitle,
             scheme = editingScheme,
             favoriteEntries = uiState.favoriteEntries,
-            onDismiss = { editingSchemeId = null },
+            onDismissRequest = closeEditorSession,
+            onConfirm = closeEditorSession,
+            onCancel = onCancelEdit,
             onSetNamingMode = { mode -> onSetNamingMode(editingScheme.id, mode) },
             onSetActiveNamingSlot = { slotIndex -> onSetActiveNamingSlot(editingScheme.id, slotIndex) },
             onUpdateNamingSlotText = { slotIndex, value ->
@@ -320,10 +378,12 @@ private fun SchemeRowItem(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SchemeEditorDialog(
-    schemeIndex: Int,
+    titleText: String,
     scheme: NamingScheme,
     favoriteEntries: List<DictEntry>,
-    onDismiss: () -> Unit,
+    onDismissRequest: () -> Unit,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
     onSetNamingMode: (GivenNameMode) -> Unit,
     onSetActiveNamingSlot: (Int) -> Unit,
     onUpdateNamingSlotText: (Int, String) -> Unit,
@@ -345,9 +405,9 @@ private fun SchemeEditorDialog(
     }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = onDismissRequest,
         title = {
-            Text(text = stringResource(R.string.naming_scheme_edit_title, schemeIndex + 1))
+            Text(text = titleText)
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -450,8 +510,13 @@ private fun SchemeEditorDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = stringResource(R.string.naming_editor_close))
+            TextButton(onClick = onConfirm) {
+                Text(text = stringResource(R.string.confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) {
+                Text(text = stringResource(R.string.cancel))
             }
         }
     )

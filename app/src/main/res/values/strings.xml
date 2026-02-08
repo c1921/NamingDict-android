@@ -83,7 +83,6 @@
     <string name="naming_mode_double">双字名</string>
     <string name="naming_slot_first">名第一字</string>
     <string name="naming_slot_second">名第二字</string>
-    <string name="naming_editor_close">关闭</string>
     <string name="naming_preview_row_placeholder">未填写</string>
     <string name="naming_dialog_favorites_title">收藏选字</string>
     <string name="naming_dialog_focus_hint">先点选空位再选字</string>
