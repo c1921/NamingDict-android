@@ -13,6 +13,7 @@ import io.github.c1921.namingdict.data.UserPrefsRepository
 import io.github.c1921.namingdict.data.WebDavConfig
 import io.github.c1921.namingdict.data.WebDavRepository
 import io.github.c1921.namingdict.data.model.DictEntry
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -21,6 +22,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
+
+internal data class DispatcherProvider(
+    val main: CoroutineDispatcher = Dispatchers.Main,
+    val io: CoroutineDispatcher = Dispatchers.IO,
+    val default: CoroutineDispatcher = Dispatchers.Default
+)
+
+internal typealias FilterIdsCalculator =
+    suspend (
+        index: Map<String, Map<String, List<Int>>>,
+        selectedValues: Map<IndexCategory, Set<String>>,
+        allIds: Set<Int>
+    ) -> Set<Int>
 
 data class UiState(
     val isLoading: Boolean = true,
@@ -45,10 +59,15 @@ data class UiState(
     val dictionaryFavoritesScrollOffsetPx: Int = 0
 )
 
-class DictViewModel(
+class DictViewModel internal constructor(
     private val repository: DictionaryRepository,
     private val userPrefsRepository: UserPrefsRepository,
-    private val webDavRepository: WebDavRepository
+    private val webDavRepository: WebDavRepository,
+    private val dispatcherProvider: DispatcherProvider = DispatcherProvider(),
+    private val autoUploadDelayMs: Long = AUTO_UPLOAD_DELAY_MS,
+    private val nowProvider: () -> Long = System::currentTimeMillis,
+    private val filterIdsCalculator: FilterIdsCalculator =
+        { index, selectedValues, allIds -> FilterEngine.filterIds(index, selectedValues, allIds) }
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState
@@ -148,7 +167,7 @@ class DictViewModel(
             webDavConfig = newConfig,
             lastSyncMessage = "WebDAV 配置已保存"
         )
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(dispatcherProvider.io) {
             runCatching {
                 userPrefsRepository.writeWebDavConfig(newConfig)
             }.onFailure { exception ->
@@ -160,7 +179,7 @@ class DictViewModel(
 
     fun manualUploadFavorites() {
         autoUploadJob?.cancel()
-        viewModelScope.launch {
+        viewModelScope.launch(dispatcherProvider.main) {
             runSyncExclusively(isAuto = false) {
                 uploadFavoritesNow(isAuto = false)
             }
@@ -169,7 +188,7 @@ class DictViewModel(
 
     fun manualDownloadFavoritesOverwriteLocal() {
         autoUploadJob?.cancel()
-        viewModelScope.launch {
+        viewModelScope.launch(dispatcherProvider.main) {
             runSyncExclusively(isAuto = false) {
                 val config = _uiState.value.webDavConfig
                 val httpsError = validateWebDavHttps(config, isAuto = false)
@@ -184,7 +203,7 @@ class DictViewModel(
 
                 _uiState.value = _uiState.value.copy(syncInProgress = true)
                 try {
-                    val downloadResult = withContext(Dispatchers.IO) {
+                    val downloadResult = withContext(dispatcherProvider.io) {
                         webDavRepository.downloadFavorites(config)
                     }
                     downloadResult.fold(
@@ -271,7 +290,7 @@ class DictViewModel(
 
     private fun load() {
         _uiState.value = UiState(isLoading = true)
-        viewModelScope.launch {
+        viewModelScope.launch(dispatcherProvider.main) {
             try {
                 val data = repository.loadAll()
                 val snapshot = userPrefsRepository.readSnapshot()
@@ -290,7 +309,7 @@ class DictViewModel(
 
                 val selectedCategory = resolveCategory(snapshot.selectedCategoryKey)
                 val selectedValues = sanitizeSelectedValues(snapshot.selectedValuesByCategoryKey)
-                val filteredIds = FilterEngine.filterIds(index, selectedValues, allIds)
+                val filteredIds = filterIdsCalculator(index, selectedValues, allIds)
                 val filteredEntries = filteredIds.mapNotNull { idToEntry[it] }.sortedBy { it.id }
 
                 _uiState.value = UiState(
@@ -322,9 +341,9 @@ class DictViewModel(
 
     private fun recomputeFilters(selectedValues: Map<IndexCategory, Set<String>>) {
         recomputeFiltersJob?.cancel()
-        recomputeFiltersJob = viewModelScope.launch {
-            val (filteredIds, filteredEntries) = withContext(Dispatchers.Default) {
-                val ids = FilterEngine.filterIds(index, selectedValues, allIds)
+        recomputeFiltersJob = viewModelScope.launch(dispatcherProvider.main) {
+            val (filteredIds, filteredEntries) = withContext(dispatcherProvider.default) {
+                val ids = filterIdsCalculator(index, selectedValues, allIds)
                 val entries = ids.mapNotNull { idToEntry[it] }.sortedBy { it.id }
                 ids to entries
             }
@@ -375,7 +394,7 @@ class DictViewModel(
 
     private fun persistFavoritesOrder(order: List<Int>) {
         val orderSnapshot = order.toList()
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(dispatcherProvider.io) {
             runCatching {
                 userPrefsRepository.writeFavoritesOrder(orderSnapshot)
             }.onFailure { exception ->
@@ -389,7 +408,7 @@ class DictViewModel(
         selectedValues: Map<IndexCategory, Set<String>>
     ) {
         val selectedValuesByCategoryKey = selectedValues.mapKeys { (key, _) -> key.key }
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(dispatcherProvider.io) {
             runCatching {
                 userPrefsRepository.writeFilterState(category.key, selectedValuesByCategoryKey)
             }.onFailure { exception ->
@@ -400,7 +419,7 @@ class DictViewModel(
 
     private fun persistDictionaryScrollStateToStorage(anchorEntryId: Int?, offsetPx: Int) {
         val sanitizedOffsetPx = offsetPx.coerceAtLeast(0)
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(dispatcherProvider.io) {
             runCatching {
                 userPrefsRepository.writeDictionaryScrollState(anchorEntryId, sanitizedOffsetPx)
             }.onFailure { exception ->
@@ -410,7 +429,7 @@ class DictViewModel(
     }
 
     private fun persistDictionaryShowFavoritesOnlyToStorage(enabled: Boolean) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(dispatcherProvider.io) {
             runCatching {
                 userPrefsRepository.writeDictionaryShowFavoritesOnly(enabled)
             }.onFailure { exception ->
@@ -421,7 +440,7 @@ class DictViewModel(
 
     private fun persistDictionaryFavoritesScrollStateToStorage(anchorEntryId: Int?, offsetPx: Int) {
         val sanitizedOffsetPx = offsetPx.coerceAtLeast(0)
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(dispatcherProvider.io) {
             runCatching {
                 userPrefsRepository.writeDictionaryFavoritesScrollState(anchorEntryId, sanitizedOffsetPx)
             }.onFailure { exception ->
@@ -432,8 +451,8 @@ class DictViewModel(
 
     private fun scheduleAutoUploadFavorites() {
         autoUploadJob?.cancel()
-        autoUploadJob = viewModelScope.launch {
-            delay(AUTO_UPLOAD_DELAY_MS)
+        autoUploadJob = viewModelScope.launch(dispatcherProvider.main) {
+            delay(autoUploadDelayMs)
             runSyncExclusively(isAuto = true) {
                 uploadFavoritesNow(isAuto = true)
             }
@@ -461,10 +480,10 @@ class DictViewModel(
         try {
             val payload = FavoritesSyncPayload(
                 version = 1,
-                updatedAt = System.currentTimeMillis(),
+                updatedAt = nowProvider(),
                 favoriteOrder = favoriteOrder.toList()
             )
-            val syncResult = withContext(Dispatchers.IO) {
+            val syncResult = withContext(dispatcherProvider.io) {
                 webDavRepository.uploadFavorites(config, payload)
             }
             applyUploadResult(syncResult = syncResult, isAuto = isAuto)
