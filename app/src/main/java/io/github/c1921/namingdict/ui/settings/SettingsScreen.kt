@@ -277,46 +277,48 @@ private fun SettingsAboutScreen(
             )
         }
         Spacer(modifier = Modifier.weight(1f))
-        ListItem(
-            colors = ListItemDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            ),
-            headlineContent = { Text(text = stringResource(R.string.settings_about_license_title)) },
-            supportingContent = { Text(text = stringResource(R.string.settings_about_license_value)) },
-            trailingContent = {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                    contentDescription = stringResource(R.string.settings_about_license_title),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(MaterialTheme.shapes.medium)
-                .clickable {
-                    uriHandler.openUri(licenseUrl)
-                }
-        )
-        ListItem(
-            colors = ListItemDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            ),
-            headlineContent = { Text(text = stringResource(R.string.settings_about_github_title)) },
-            supportingContent = { Text(text = stringResource(R.string.settings_about_github_value)) },
-            trailingContent = {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                    contentDescription = stringResource(R.string.settings_about_github_title),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(MaterialTheme.shapes.medium)
-                .clickable {
-                    uriHandler.openUri(githubUrl)
-                }
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(spacing.small)) {
+            ListItem(
+                colors = ListItemDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+                headlineContent = { Text(text = stringResource(R.string.settings_about_license_title)) },
+                supportingContent = { Text(text = stringResource(R.string.settings_about_license_value)) },
+                trailingContent = {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                        contentDescription = stringResource(R.string.settings_about_license_title),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.medium)
+                    .clickable {
+                        uriHandler.openUri(licenseUrl)
+                    }
+            )
+            ListItem(
+                colors = ListItemDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+                headlineContent = { Text(text = stringResource(R.string.settings_about_github_title)) },
+                supportingContent = { Text(text = stringResource(R.string.settings_about_github_value)) },
+                trailingContent = {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                        contentDescription = stringResource(R.string.settings_about_github_title),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.medium)
+                    .clickable {
+                        uriHandler.openUri(githubUrl)
+                    }
+            )
+        }
     }
 }
 
