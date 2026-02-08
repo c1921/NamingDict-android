@@ -1,6 +1,7 @@
 package io.github.c1921.namingdict.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -21,7 +22,10 @@ data class UserPrefsSnapshot(
     val selectedCategoryKey: String? = null,
     val selectedValuesByCategoryKey: Map<String, Set<String>> = emptyMap(),
     val dictionaryScrollAnchorEntryId: Int? = null,
-    val dictionaryScrollOffsetPx: Int = 0
+    val dictionaryScrollOffsetPx: Int = 0,
+    val dictionaryShowFavoritesOnly: Boolean = false,
+    val dictionaryFavoritesScrollAnchorEntryId: Int? = null,
+    val dictionaryFavoritesScrollOffsetPx: Int = 0
 )
 
 class UserPrefsRepository(private val context: Context) {
@@ -45,7 +49,10 @@ class UserPrefsRepository(private val context: Context) {
             selectedCategoryKey = preferences[SELECTED_CATEGORY_KEY],
             selectedValuesByCategoryKey = decodeSelectedValues(preferences[SELECTED_VALUES_KEY]),
             dictionaryScrollAnchorEntryId = preferences[DICTIONARY_SCROLL_ANCHOR_ID_KEY],
-            dictionaryScrollOffsetPx = preferences[DICTIONARY_SCROLL_OFFSET_KEY] ?: 0
+            dictionaryScrollOffsetPx = preferences[DICTIONARY_SCROLL_OFFSET_KEY] ?: 0,
+            dictionaryShowFavoritesOnly = preferences[DICTIONARY_SHOW_FAVORITES_ONLY_KEY] ?: false,
+            dictionaryFavoritesScrollAnchorEntryId = preferences[DICTIONARY_FAVORITES_SCROLL_ANCHOR_ID_KEY],
+            dictionaryFavoritesScrollOffsetPx = preferences[DICTIONARY_FAVORITES_SCROLL_OFFSET_KEY] ?: 0
         )
     }
 
@@ -102,6 +109,23 @@ class UserPrefsRepository(private val context: Context) {
         }
     }
 
+    suspend fun writeDictionaryShowFavoritesOnly(enabled: Boolean) {
+        context.userPrefsDataStore.edit { preferences ->
+            preferences[DICTIONARY_SHOW_FAVORITES_ONLY_KEY] = enabled
+        }
+    }
+
+    suspend fun writeDictionaryFavoritesScrollState(anchorEntryId: Int?, offsetPx: Int) {
+        context.userPrefsDataStore.edit { preferences ->
+            if (anchorEntryId == null) {
+                preferences.remove(DICTIONARY_FAVORITES_SCROLL_ANCHOR_ID_KEY)
+            } else {
+                preferences[DICTIONARY_FAVORITES_SCROLL_ANCHOR_ID_KEY] = anchorEntryId
+            }
+            preferences[DICTIONARY_FAVORITES_SCROLL_OFFSET_KEY] = offsetPx.coerceAtLeast(0)
+        }
+    }
+
     private fun decodeFavoriteOrder(raw: String?): List<Int> {
         if (raw.isNullOrBlank()) {
             return emptyList()
@@ -131,6 +155,9 @@ class UserPrefsRepository(private val context: Context) {
         val SELECTED_VALUES_KEY = stringPreferencesKey("selected_values_map")
         val DICTIONARY_SCROLL_ANCHOR_ID_KEY = intPreferencesKey("dictionary_scroll_anchor_id")
         val DICTIONARY_SCROLL_OFFSET_KEY = intPreferencesKey("dictionary_scroll_offset_px")
+        val DICTIONARY_SHOW_FAVORITES_ONLY_KEY = booleanPreferencesKey("dictionary_show_favorites_only")
+        val DICTIONARY_FAVORITES_SCROLL_ANCHOR_ID_KEY = intPreferencesKey("dictionary_favorites_scroll_anchor_id")
+        val DICTIONARY_FAVORITES_SCROLL_OFFSET_KEY = intPreferencesKey("dictionary_favorites_scroll_offset_px")
         val WEBDAV_SERVER_URL_KEY = stringPreferencesKey("webdav_server_url")
         val WEBDAV_USERNAME_KEY = stringPreferencesKey("webdav_username")
         val WEBDAV_PASSWORD_KEY = stringPreferencesKey("webdav_password")

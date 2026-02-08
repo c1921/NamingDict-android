@@ -38,7 +38,10 @@ data class UiState(
     val lastSyncMessage: String? = null,
     val selectedEntryId: Int? = null,
     val dictionaryScrollAnchorEntryId: Int? = null,
-    val dictionaryScrollOffsetPx: Int = 0
+    val dictionaryScrollOffsetPx: Int = 0,
+    val dictionaryShowFavoritesOnly: Boolean = false,
+    val dictionaryFavoritesScrollAnchorEntryId: Int? = null,
+    val dictionaryFavoritesScrollOffsetPx: Int = 0
 )
 
 class DictViewModel(
@@ -225,6 +228,35 @@ class DictViewModel(
         persistDictionaryScrollStateToStorage(anchorEntryId = anchorEntryId, offsetPx = sanitizedOffsetPx)
     }
 
+    fun setDictionaryShowFavoritesOnly(enabled: Boolean) {
+        val current = _uiState.value
+        if (current.dictionaryShowFavoritesOnly == enabled) {
+            return
+        }
+        _uiState.value = current.copy(dictionaryShowFavoritesOnly = enabled)
+        persistDictionaryShowFavoritesOnlyToStorage(enabled)
+    }
+
+    fun persistDictionaryFavoritesScrollState(anchorEntryId: Int?, offsetPx: Int) {
+        val sanitizedOffsetPx = offsetPx.coerceAtLeast(0)
+        val current = _uiState.value
+        if (
+            current.dictionaryFavoritesScrollAnchorEntryId == anchorEntryId &&
+            current.dictionaryFavoritesScrollOffsetPx == sanitizedOffsetPx
+        ) {
+            return
+        }
+
+        _uiState.value = current.copy(
+            dictionaryFavoritesScrollAnchorEntryId = anchorEntryId,
+            dictionaryFavoritesScrollOffsetPx = sanitizedOffsetPx
+        )
+        persistDictionaryFavoritesScrollStateToStorage(
+            anchorEntryId = anchorEntryId,
+            offsetPx = sanitizedOffsetPx
+        )
+    }
+
     private fun load() {
         _uiState.value = UiState(isLoading = true)
         viewModelScope.launch {
@@ -262,7 +294,10 @@ class DictViewModel(
                     favoriteEntries = favoriteEntries,
                     webDavConfig = webDavConfig,
                     dictionaryScrollAnchorEntryId = snapshot.dictionaryScrollAnchorEntryId,
-                    dictionaryScrollOffsetPx = snapshot.dictionaryScrollOffsetPx.coerceAtLeast(0)
+                    dictionaryScrollOffsetPx = snapshot.dictionaryScrollOffsetPx.coerceAtLeast(0),
+                    dictionaryShowFavoritesOnly = snapshot.dictionaryShowFavoritesOnly,
+                    dictionaryFavoritesScrollAnchorEntryId = snapshot.dictionaryFavoritesScrollAnchorEntryId,
+                    dictionaryFavoritesScrollOffsetPx = snapshot.dictionaryFavoritesScrollOffsetPx.coerceAtLeast(0)
                 )
             } catch (ex: Exception) {
                 _uiState.value = UiState(
@@ -355,6 +390,27 @@ class DictViewModel(
                 userPrefsRepository.writeDictionaryScrollState(anchorEntryId, sanitizedOffsetPx)
             }.onFailure { exception ->
                 Log.w(TAG, "Failed to persist dictionary scroll state.", exception)
+            }
+        }
+    }
+
+    private fun persistDictionaryShowFavoritesOnlyToStorage(enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                userPrefsRepository.writeDictionaryShowFavoritesOnly(enabled)
+            }.onFailure { exception ->
+                Log.w(TAG, "Failed to persist dictionary favorites-only state.", exception)
+            }
+        }
+    }
+
+    private fun persistDictionaryFavoritesScrollStateToStorage(anchorEntryId: Int?, offsetPx: Int) {
+        val sanitizedOffsetPx = offsetPx.coerceAtLeast(0)
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                userPrefsRepository.writeDictionaryFavoritesScrollState(anchorEntryId, sanitizedOffsetPx)
+            }.onFailure { exception ->
+                Log.w(TAG, "Failed to persist dictionary favorites scroll state.", exception)
             }
         }
     }

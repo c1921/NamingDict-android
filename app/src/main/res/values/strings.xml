@@ -3,6 +3,7 @@
     <string name="tab_filter">筛选</string>
     <string name="tab_dictionary">字典</string>
     <string name="tab_favorites">收藏</string>
+    <string name="tab_new_feature">新功能</string>
     <string name="tab_settings">设置</string>
     <string name="favorites_title">收藏</string>
     <string name="favorites_empty">暂无收藏</string>
@@ -26,6 +27,9 @@
     <string name="filter_tone_light">轻声</string>
     <string name="results">结果：%1$d</string>
     <string name="no_results">当前筛选下无匹配条目</string>
+    <string name="new_feature_placeholder">新功能开发中</string>
+    <string name="dictionary_mode_filtered">筛选</string>
+    <string name="dictionary_mode_favorites">收藏</string>
     <string name="loading">正在加载字典...</string>
     <string name="error_loading">数据加载失败</string>
     <string name="retry">重试</string>

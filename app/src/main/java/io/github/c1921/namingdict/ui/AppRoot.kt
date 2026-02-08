@@ -49,6 +49,9 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -94,7 +97,7 @@ private const val DICTIONARY_SCROLL_PERSIST_DEBOUNCE_MS = 250L
 private enum class MainTab(val titleResId: Int) {
     Filter(R.string.tab_filter),
     Dictionary(R.string.tab_dictionary),
-    Favorites(R.string.tab_favorites),
+    NewFeature(R.string.tab_new_feature),
     Settings(R.string.tab_settings)
 }
 
@@ -152,7 +155,9 @@ fun AppRoot(viewModel: DictViewModel) {
             onManualDownloadFavorites = viewModel::manualDownloadFavoritesOverwriteLocal,
             onToggleFavorite = requestToggleFavorite,
             onSelectEntry = viewModel::selectEntry,
-            onPersistDictionaryScrollState = viewModel::persistDictionaryScrollState
+            onPersistDictionaryScrollState = viewModel::persistDictionaryScrollState,
+            onSetDictionaryShowFavoritesOnly = viewModel::setDictionaryShowFavoritesOnly,
+            onPersistDictionaryFavoritesScrollState = viewModel::persistDictionaryFavoritesScrollState
         )
     }
 
@@ -232,7 +237,9 @@ private fun MainTabbedContent(
     onManualDownloadFavorites: () -> Unit,
     onToggleFavorite: (Int) -> Unit,
     onSelectEntry: (Int) -> Unit,
-    onPersistDictionaryScrollState: (Int?, Int) -> Unit
+    onPersistDictionaryScrollState: (Int?, Int) -> Unit,
+    onSetDictionaryShowFavoritesOnly: (Boolean) -> Unit,
+    onPersistDictionaryFavoritesScrollState: (Int?, Int) -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.Dictionary) }
     var settingsPage by rememberSaveable { mutableStateOf(SettingsPage.Home) }
@@ -298,7 +305,7 @@ private fun MainTabbedContent(
                             val icon = when (tab) {
                                 MainTab.Filter -> Icons.Outlined.FilterList
                                 MainTab.Dictionary -> Icons.AutoMirrored.Outlined.MenuBook
-                                MainTab.Favorites -> Icons.Outlined.StarBorder
+                                MainTab.NewFeature -> Icons.Outlined.StarBorder
                                 MainTab.Settings -> Icons.Outlined.Settings
                             }
                             Icon(
@@ -325,18 +332,18 @@ private fun MainTabbedContent(
                 uiState = uiState,
                 onToggleFavorite = onToggleFavorite,
                 onSelectEntry = onSelectEntry,
+                showFavoritesOnly = uiState.dictionaryShowFavoritesOnly,
+                onSetShowFavoritesOnly = onSetDictionaryShowFavoritesOnly,
                 savedAnchorEntryId = uiState.dictionaryScrollAnchorEntryId,
                 savedOffsetPx = uiState.dictionaryScrollOffsetPx,
+                favoritesSavedAnchorEntryId = uiState.dictionaryFavoritesScrollAnchorEntryId,
+                favoritesSavedOffsetPx = uiState.dictionaryFavoritesScrollOffsetPx,
                 onPersistScrollState = onPersistDictionaryScrollState,
+                onPersistFavoritesScrollState = onPersistDictionaryFavoritesScrollState,
                 modifier = Modifier.padding(innerPadding)
             )
 
-            MainTab.Favorites -> FavoritesScreen(
-                uiState = uiState,
-                onToggleFavorite = onToggleFavorite,
-                onSelectEntry = onSelectEntry,
-                modifier = Modifier.padding(innerPadding)
-            )
+            MainTab.NewFeature -> NewFeaturePlaceholderScreen(modifier = Modifier.padding(innerPadding))
 
             MainTab.Settings -> SettingsScreen(
                 uiState = uiState,
@@ -514,32 +521,61 @@ private fun DictionaryScreen(
     uiState: UiState,
     onToggleFavorite: (Int) -> Unit,
     onSelectEntry: (Int) -> Unit,
+    showFavoritesOnly: Boolean,
+    onSetShowFavoritesOnly: (Boolean) -> Unit,
     savedAnchorEntryId: Int?,
     savedOffsetPx: Int,
+    favoritesSavedAnchorEntryId: Int?,
+    favoritesSavedOffsetPx: Int,
     onPersistScrollState: (Int?, Int) -> Unit,
+    onPersistFavoritesScrollState: (Int?, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val currentEntries = uiState.filteredEntries
-    val initialAnchorIndex = savedAnchorEntryId?.let { anchorEntryId ->
-        currentEntries.indexOfFirst { entry -> entry.id == anchorEntryId }
+    val dictionaryEntries = uiState.filteredEntries
+    val favoritesEntries = uiState.favoriteEntries
+    val displayEntries = if (showFavoritesOnly) favoritesEntries else dictionaryEntries
+
+    val initialDictionaryAnchorIndex = savedAnchorEntryId?.let { anchorEntryId ->
+        dictionaryEntries.indexOfFirst { entry -> entry.id == anchorEntryId }
     } ?: -1
-    val initialFirstVisibleItemIndex = if (initialAnchorIndex >= 0) initialAnchorIndex else 0
-    val initialFirstVisibleItemScrollOffset = if (initialAnchorIndex >= 0) {
+    val initialDictionaryIndex = if (initialDictionaryAnchorIndex >= 0) initialDictionaryAnchorIndex else 0
+    val initialDictionaryOffset = if (initialDictionaryAnchorIndex >= 0) {
         savedOffsetPx.coerceAtLeast(0)
     } else {
         0
     }
-    val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = initialFirstVisibleItemIndex,
-        initialFirstVisibleItemScrollOffset = initialFirstVisibleItemScrollOffset
+
+    val initialFavoritesAnchorIndex = favoritesSavedAnchorEntryId?.let { anchorEntryId ->
+        favoritesEntries.indexOfFirst { entry -> entry.id == anchorEntryId }
+    } ?: -1
+    val initialFavoritesIndex = if (initialFavoritesAnchorIndex >= 0) initialFavoritesAnchorIndex else 0
+    val initialFavoritesOffset = if (initialFavoritesAnchorIndex >= 0) {
+        favoritesSavedOffsetPx.coerceAtLeast(0)
+    } else {
+        0
+    }
+
+    val dictionaryListState = rememberLazyListState(
+        initialFirstVisibleItemIndex = initialDictionaryIndex,
+        initialFirstVisibleItemScrollOffset = initialDictionaryOffset
+    )
+    val favoritesListState = rememberLazyListState(
+        initialFirstVisibleItemIndex = initialFavoritesIndex,
+        initialFirstVisibleItemScrollOffset = initialFavoritesOffset
     )
     val latestOnPersistScrollState by rememberUpdatedState(onPersistScrollState)
-    val latestCurrentEntries by rememberUpdatedState(currentEntries)
+    val latestOnPersistFavoritesScrollState by rememberUpdatedState(onPersistFavoritesScrollState)
+    val latestDictionaryEntries by rememberUpdatedState(dictionaryEntries)
+    val latestFavoritesEntries by rememberUpdatedState(favoritesEntries)
 
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+    val activeListState = if (showFavoritesOnly) favoritesListState else dictionaryListState
+
+    LaunchedEffect(dictionaryListState) {
+        snapshotFlow {
+            dictionaryListState.firstVisibleItemIndex to dictionaryListState.firstVisibleItemScrollOffset
+        }
             .map { (firstVisibleIndex, firstVisibleOffset) ->
-                latestCurrentEntries.getOrNull(firstVisibleIndex)?.id to firstVisibleOffset
+                latestDictionaryEntries.getOrNull(firstVisibleIndex)?.id to firstVisibleOffset
             }
             .distinctUntilChanged()
             .debounce(DICTIONARY_SCROLL_PERSIST_DEBOUNCE_MS)
@@ -548,39 +584,78 @@ private fun DictionaryScreen(
             }
     }
 
+    LaunchedEffect(favoritesListState) {
+        snapshotFlow {
+            favoritesListState.firstVisibleItemIndex to favoritesListState.firstVisibleItemScrollOffset
+        }
+            .map { (firstVisibleIndex, firstVisibleOffset) ->
+                latestFavoritesEntries.getOrNull(firstVisibleIndex)?.id to firstVisibleOffset
+            }
+            .distinctUntilChanged()
+            .debounce(DICTIONARY_SCROLL_PERSIST_DEBOUNCE_MS)
+            .collect { (anchorEntryId, offsetPx) ->
+                latestOnPersistFavoritesScrollState(anchorEntryId, offsetPx)
+            }
+    }
+
     Column(
         modifier = modifier.fillMaxSize()
     ) {
-        Text(
-            text = stringResource(R.string.results, uiState.filteredEntries.size),
-            style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.results, displayEntries.size),
+                style = MaterialTheme.typography.titleSmall
+            )
+            DictionaryModeControl(
+                showFavoritesOnly = showFavoritesOnly,
+                onSetShowFavoritesOnly = onSetShowFavoritesOnly
+            )
+        }
         HorizontalDivider()
 
-        if (uiState.filteredEntries.isEmpty()) {
+        if (displayEntries.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(text = stringResource(R.string.no_results))
+                Text(
+                    text = stringResource(
+                        if (showFavoritesOnly) R.string.favorites_empty else R.string.no_results
+                    )
+                )
             }
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                state = listState
+                state = activeListState
             ) {
-                items(uiState.filteredEntries.size, key = { uiState.filteredEntries[it].id }) { index ->
-                    val entry = uiState.filteredEntries[index]
+                items(displayEntries.size, key = { displayEntries[it].id }) { index ->
+                    val entry = displayEntries[index]
                     DictListItem(
                         entry = entry,
                         isFavorited = uiState.favoriteIds.contains(entry.id),
                         onToggleFavorite = { onToggleFavorite(entry.id) },
                         onClick = {
-                            val anchorEntryId = currentEntries
-                                .getOrNull(listState.firstVisibleItemIndex)
-                                ?.id
-                            latestOnPersistScrollState(
-                                anchorEntryId,
-                                listState.firstVisibleItemScrollOffset
-                            )
+                            if (showFavoritesOnly) {
+                                val anchorEntryId = favoritesEntries
+                                    .getOrNull(favoritesListState.firstVisibleItemIndex)
+                                    ?.id
+                                latestOnPersistFavoritesScrollState(
+                                    anchorEntryId,
+                                    favoritesListState.firstVisibleItemScrollOffset
+                                )
+                            } else {
+                                val anchorEntryId = dictionaryEntries
+                                    .getOrNull(dictionaryListState.firstVisibleItemIndex)
+                                    ?.id
+                                latestOnPersistScrollState(
+                                    anchorEntryId,
+                                    dictionaryListState.firstVisibleItemScrollOffset
+                                )
+                            }
                             onSelectEntry(entry.id)
                         }
                     )
@@ -591,30 +666,49 @@ private fun DictionaryScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FavoritesScreen(
-    uiState: UiState,
-    onToggleFavorite: (Int) -> Unit,
-    onSelectEntry: (Int) -> Unit,
+private fun DictionaryModeControl(
+    showFavoritesOnly: Boolean,
+    onSetShowFavoritesOnly: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    if (uiState.favoriteEntries.isEmpty()) {
-        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(text = stringResource(R.string.favorites_empty))
-        }
-    } else {
-        LazyColumn(modifier = modifier.fillMaxSize()) {
-            items(uiState.favoriteEntries.size, key = { uiState.favoriteEntries[it].id }) { index ->
-                val entry = uiState.favoriteEntries[index]
-                DictListItem(
-                    entry = entry,
-                    isFavorited = true,
-                    onToggleFavorite = { onToggleFavorite(entry.id) },
-                    onClick = { onSelectEntry(entry.id) }
+    SingleChoiceSegmentedButtonRow(modifier = modifier) {
+        SegmentedButton(
+            selected = !showFavoritesOnly,
+            onClick = { onSetShowFavoritesOnly(false) },
+            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+            icon = {
+                Icon(
+                    imageVector = Icons.Outlined.FilterList,
+                    contentDescription = null
                 )
-                HorizontalDivider()
             }
+        ) {
+            Text(text = stringResource(R.string.dictionary_mode_filtered))
         }
+        SegmentedButton(
+            selected = showFavoritesOnly,
+            onClick = { onSetShowFavoritesOnly(true) },
+            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+            icon = {
+                Icon(
+                    imageVector = Icons.Filled.Star,
+                    contentDescription = null
+                )
+            }
+        ) {
+            Text(text = stringResource(R.string.dictionary_mode_favorites))
+        }
+    }
+}
+
+@Composable
+private fun NewFeaturePlaceholderScreen(
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(text = stringResource(R.string.new_feature_placeholder))
     }
 }
 
