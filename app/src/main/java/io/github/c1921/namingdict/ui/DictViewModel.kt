@@ -137,6 +137,10 @@ class DictViewModel(
             username = username.trim(),
             password = password
         )
+        if (newConfig.serverUrl.isNotBlank() && !newConfig.isHttps()) {
+            postSyncMessage(HTTPS_REQUIRED_SAVE_MESSAGE)
+            return
+        }
         _uiState.value = _uiState.value.copy(
             webDavConfig = newConfig,
             lastSyncMessage = "WebDAV 配置已保存"
@@ -168,6 +172,11 @@ class DictViewModel(
         }
         viewModelScope.launch {
             val config = _uiState.value.webDavConfig
+            val httpsError = validateWebDavHttps(config, isAuto = false)
+            if (httpsError != null) {
+                postSyncMessage(httpsError)
+                return@launch
+            }
             if (!config.isComplete()) {
                 postSyncMessage("WebDAV 配置不完整，无法下载")
                 return@launch
@@ -425,6 +434,11 @@ class DictViewModel(
 
     private suspend fun uploadFavoritesNow(isAuto: Boolean) {
         val config = _uiState.value.webDavConfig
+        val httpsError = validateWebDavHttps(config, isAuto = isAuto)
+        if (httpsError != null) {
+            postSyncMessage(httpsError)
+            return
+        }
         if (!config.isComplete()) {
             val message = if (isAuto) {
                 "自动同步已跳过：WebDAV 配置不完整"
@@ -463,9 +477,22 @@ class DictViewModel(
         _uiState.value = _uiState.value.copy(lastSyncMessage = message)
     }
 
+    private fun validateWebDavHttps(config: WebDavConfig, isAuto: Boolean): String? {
+        if (config.serverUrl.isBlank() || config.isHttps()) {
+            return null
+        }
+        return if (isAuto) {
+            "自动同步已跳过：$HTTPS_REQUIRED_MESSAGE"
+        } else {
+            HTTPS_REQUIRED_MESSAGE
+        }
+    }
+
     companion object {
         private const val TAG = "DictViewModel"
         private const val AUTO_UPLOAD_DELAY_MS = 30_000L
+        private const val HTTPS_REQUIRED_MESSAGE = "WebDAV 地址必须使用 HTTPS（https://）"
+        private const val HTTPS_REQUIRED_SAVE_MESSAGE = "仅支持 HTTPS WebDAV 地址，请使用 https://"
 
         fun factory(
             repository: DictionaryRepository,

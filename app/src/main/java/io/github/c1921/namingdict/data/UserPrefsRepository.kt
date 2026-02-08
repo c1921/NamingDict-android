@@ -28,7 +28,10 @@ data class UserPrefsSnapshot(
     val dictionaryFavoritesScrollOffsetPx: Int = 0
 )
 
-class UserPrefsRepository(private val context: Context) {
+class UserPrefsRepository(
+    private val context: Context,
+    private val secureWebDavStore: SecureWebDavStore = EncryptedPrefsSecureWebDavStore(context)
+) {
     private val json = Json {
         ignoreUnknownKeys = true
     }
@@ -67,10 +70,24 @@ class UserPrefsRepository(private val context: Context) {
             }
             .first()
 
+        val securePassword = secureWebDavStore.readPassword()
+        val legacyPassword = preferences[WEBDAV_PASSWORD_KEY].orEmpty()
+        val password = when {
+            securePassword.isNotBlank() -> securePassword
+            legacyPassword.isNotBlank() -> {
+                secureWebDavStore.writePassword(legacyPassword)
+                context.userPrefsDataStore.edit { mutablePreferences ->
+                    mutablePreferences.remove(WEBDAV_PASSWORD_KEY)
+                }
+                legacyPassword
+            }
+            else -> ""
+        }
+
         return WebDavConfig(
             serverUrl = preferences[WEBDAV_SERVER_URL_KEY].orEmpty(),
             username = preferences[WEBDAV_USERNAME_KEY].orEmpty(),
-            password = preferences[WEBDAV_PASSWORD_KEY].orEmpty()
+            password = password
         )
     }
 
@@ -91,10 +108,17 @@ class UserPrefsRepository(private val context: Context) {
     }
 
     suspend fun writeWebDavConfig(config: WebDavConfig) {
+        val normalizedServerUrl = config.serverUrl.trim()
+        val normalizedUsername = config.username.trim()
         context.userPrefsDataStore.edit { preferences ->
-            preferences[WEBDAV_SERVER_URL_KEY] = config.serverUrl.trim()
-            preferences[WEBDAV_USERNAME_KEY] = config.username.trim()
-            preferences[WEBDAV_PASSWORD_KEY] = config.password
+            preferences[WEBDAV_SERVER_URL_KEY] = normalizedServerUrl
+            preferences[WEBDAV_USERNAME_KEY] = normalizedUsername
+            preferences.remove(WEBDAV_PASSWORD_KEY)
+        }
+        if (config.password.isBlank()) {
+            secureWebDavStore.clearPassword()
+        } else {
+            secureWebDavStore.writePassword(config.password)
         }
     }
 

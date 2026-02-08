@@ -30,6 +30,8 @@ data class WebDavConfig(
 
     fun isHttp(): Boolean = serverUrl.trim().startsWith("http://", ignoreCase = true)
 
+    fun isHttps(): Boolean = serverUrl.trim().startsWith("https://", ignoreCase = true)
+
     fun buildFolderUrl(): String {
         val base = serverUrl.trim().removeSuffix("/")
         return "$base/$DEFAULT_FOLDER_NAME"
