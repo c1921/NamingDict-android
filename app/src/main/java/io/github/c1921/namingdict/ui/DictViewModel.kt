@@ -36,7 +36,9 @@ data class UiState(
     val webDavConfig: WebDavConfig = WebDavConfig(),
     val syncInProgress: Boolean = false,
     val lastSyncMessage: String? = null,
-    val selectedEntryId: Int? = null
+    val selectedEntryId: Int? = null,
+    val dictionaryScrollAnchorEntryId: Int? = null,
+    val dictionaryScrollOffsetPx: Int = 0
 )
 
 class DictViewModel(
@@ -206,6 +208,23 @@ class DictViewModel(
         _uiState.value = _uiState.value.copy(selectedEntryId = null)
     }
 
+    fun persistDictionaryScrollState(anchorEntryId: Int?, offsetPx: Int) {
+        val sanitizedOffsetPx = offsetPx.coerceAtLeast(0)
+        val current = _uiState.value
+        if (
+            current.dictionaryScrollAnchorEntryId == anchorEntryId &&
+            current.dictionaryScrollOffsetPx == sanitizedOffsetPx
+        ) {
+            return
+        }
+
+        _uiState.value = current.copy(
+            dictionaryScrollAnchorEntryId = anchorEntryId,
+            dictionaryScrollOffsetPx = sanitizedOffsetPx
+        )
+        persistDictionaryScrollStateToStorage(anchorEntryId = anchorEntryId, offsetPx = sanitizedOffsetPx)
+    }
+
     private fun load() {
         _uiState.value = UiState(isLoading = true)
         viewModelScope.launch {
@@ -241,7 +260,9 @@ class DictViewModel(
                     filteredEntries = filteredEntries,
                     favoriteIds = favoriteIds,
                     favoriteEntries = favoriteEntries,
-                    webDavConfig = webDavConfig
+                    webDavConfig = webDavConfig,
+                    dictionaryScrollAnchorEntryId = snapshot.dictionaryScrollAnchorEntryId,
+                    dictionaryScrollOffsetPx = snapshot.dictionaryScrollOffsetPx.coerceAtLeast(0)
                 )
             } catch (ex: Exception) {
                 _uiState.value = UiState(
@@ -258,16 +279,22 @@ class DictViewModel(
             val filteredEntries = filteredIds.mapNotNull { idToEntry[it] }.sortedBy { it.id }
             withContext(Dispatchers.Main) {
                 val latest = _uiState.value
+                val filterChanged = latest.selectedValues != selectedValues
                 val updated = latest.copy(
                     selectedValues = selectedValues,
                     filteredIds = filteredIds,
-                    filteredEntries = filteredEntries
+                    filteredEntries = filteredEntries,
+                    dictionaryScrollAnchorEntryId = if (filterChanged) null else latest.dictionaryScrollAnchorEntryId,
+                    dictionaryScrollOffsetPx = if (filterChanged) 0 else latest.dictionaryScrollOffsetPx
                 )
                 _uiState.value = updated
                 persistFilterState(
                     category = updated.selectedCategory,
                     selectedValues = updated.selectedValues
                 )
+                if (filterChanged) {
+                    persistDictionaryScrollStateToStorage(anchorEntryId = null, offsetPx = 0)
+                }
             }
         }
     }
@@ -317,6 +344,17 @@ class DictViewModel(
                 userPrefsRepository.writeFilterState(category.key, selectedValuesByCategoryKey)
             }.onFailure { exception ->
                 Log.w(TAG, "Failed to persist filter state.", exception)
+            }
+        }
+    }
+
+    private fun persistDictionaryScrollStateToStorage(anchorEntryId: Int?, offsetPx: Int) {
+        val sanitizedOffsetPx = offsetPx.coerceAtLeast(0)
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                userPrefsRepository.writeDictionaryScrollState(anchorEntryId, sanitizedOffsetPx)
+            }.onFailure { exception ->
+                Log.w(TAG, "Failed to persist dictionary scroll state.", exception)
             }
         }
     }

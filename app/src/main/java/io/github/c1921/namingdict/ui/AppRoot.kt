@@ -18,6 +18,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -80,11 +81,15 @@ import io.github.c1921.namingdict.R
 import io.github.c1921.namingdict.data.IndexCategory
 import io.github.c1921.namingdict.data.sortIndexValues
 import io.github.c1921.namingdict.data.model.DictEntry
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 
 private val HanziFontFamily = FontFamily.Serif
+private const val DICTIONARY_SCROLL_PERSIST_DEBOUNCE_MS = 250L
 
 private enum class MainTab(val titleResId: Int) {
     Filter(R.string.tab_filter),
@@ -146,7 +151,8 @@ fun AppRoot(viewModel: DictViewModel) {
             onManualUploadFavorites = viewModel::manualUploadFavorites,
             onManualDownloadFavorites = viewModel::manualDownloadFavoritesOverwriteLocal,
             onToggleFavorite = requestToggleFavorite,
-            onSelectEntry = viewModel::selectEntry
+            onSelectEntry = viewModel::selectEntry,
+            onPersistDictionaryScrollState = viewModel::persistDictionaryScrollState
         )
     }
 
@@ -225,7 +231,8 @@ private fun MainTabbedContent(
     onManualUploadFavorites: () -> Unit,
     onManualDownloadFavorites: () -> Unit,
     onToggleFavorite: (Int) -> Unit,
-    onSelectEntry: (Int) -> Unit
+    onSelectEntry: (Int) -> Unit,
+    onPersistDictionaryScrollState: (Int?, Int) -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.Dictionary) }
     var settingsPage by rememberSaveable { mutableStateOf(SettingsPage.Home) }
@@ -318,6 +325,9 @@ private fun MainTabbedContent(
                 uiState = uiState,
                 onToggleFavorite = onToggleFavorite,
                 onSelectEntry = onSelectEntry,
+                savedAnchorEntryId = uiState.dictionaryScrollAnchorEntryId,
+                savedOffsetPx = uiState.dictionaryScrollOffsetPx,
+                onPersistScrollState = onPersistDictionaryScrollState,
                 modifier = Modifier.padding(innerPadding)
             )
 
@@ -498,13 +508,46 @@ private fun displayFilterValue(category: IndexCategory, value: String): String {
     }
 }
 
+@OptIn(FlowPreview::class)
 @Composable
 private fun DictionaryScreen(
     uiState: UiState,
     onToggleFavorite: (Int) -> Unit,
     onSelectEntry: (Int) -> Unit,
+    savedAnchorEntryId: Int?,
+    savedOffsetPx: Int,
+    onPersistScrollState: (Int?, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val currentEntries = uiState.filteredEntries
+    val initialAnchorIndex = savedAnchorEntryId?.let { anchorEntryId ->
+        currentEntries.indexOfFirst { entry -> entry.id == anchorEntryId }
+    } ?: -1
+    val initialFirstVisibleItemIndex = if (initialAnchorIndex >= 0) initialAnchorIndex else 0
+    val initialFirstVisibleItemScrollOffset = if (initialAnchorIndex >= 0) {
+        savedOffsetPx.coerceAtLeast(0)
+    } else {
+        0
+    }
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = initialFirstVisibleItemIndex,
+        initialFirstVisibleItemScrollOffset = initialFirstVisibleItemScrollOffset
+    )
+    val latestOnPersistScrollState by rememberUpdatedState(onPersistScrollState)
+    val latestCurrentEntries by rememberUpdatedState(currentEntries)
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .map { (firstVisibleIndex, firstVisibleOffset) ->
+                latestCurrentEntries.getOrNull(firstVisibleIndex)?.id to firstVisibleOffset
+            }
+            .distinctUntilChanged()
+            .debounce(DICTIONARY_SCROLL_PERSIST_DEBOUNCE_MS)
+            .collect { (anchorEntryId, offsetPx) ->
+                latestOnPersistScrollState(anchorEntryId, offsetPx)
+            }
+    }
+
     Column(
         modifier = modifier.fillMaxSize()
     ) {
@@ -520,14 +563,26 @@ private fun DictionaryScreen(
                 Text(text = stringResource(R.string.no_results))
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                state = listState
+            ) {
                 items(uiState.filteredEntries.size, key = { uiState.filteredEntries[it].id }) { index ->
                     val entry = uiState.filteredEntries[index]
                     DictListItem(
                         entry = entry,
                         isFavorited = uiState.favoriteIds.contains(entry.id),
                         onToggleFavorite = { onToggleFavorite(entry.id) },
-                        onClick = { onSelectEntry(entry.id) }
+                        onClick = {
+                            val anchorEntryId = currentEntries
+                                .getOrNull(listState.firstVisibleItemIndex)
+                                ?.id
+                            latestOnPersistScrollState(
+                                anchorEntryId,
+                                listState.firstVisibleItemScrollOffset
+                            )
+                            onSelectEntry(entry.id)
+                        }
                     )
                     HorizontalDivider()
                 }
