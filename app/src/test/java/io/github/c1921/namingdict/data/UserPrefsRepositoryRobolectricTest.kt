@@ -6,8 +6,11 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.test.core.app.ApplicationProvider
+import io.github.c1921.namingdict.data.model.GivenNameMode
+import io.github.c1921.namingdict.data.model.NamingScheme
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -94,6 +97,52 @@ class UserPrefsRepositoryRobolectricTest {
         assertEquals(0, resetSnapshot.dictionaryFavoritesScrollOffsetPx)
     }
 
+    @Test
+    fun namingDraft_readWriteRoundTrip() = runTest {
+        val schemes = listOf(
+            NamingScheme(
+                id = 10L,
+                givenNameMode = GivenNameMode.Double,
+                slot1 = "安",
+                slot2 = "宁"
+            ),
+            NamingScheme(
+                id = 11L,
+                givenNameMode = GivenNameMode.Single,
+                slot1 = "禾",
+                slot2 = ""
+            )
+        )
+        repository.writeNamingDraft(
+            surname = "欧阳",
+            schemes = schemes,
+            activeSchemeId = 11L,
+            activeSlotIndex = 1
+        )
+
+        val snapshot = repository.readSnapshot()
+        assertEquals("欧阳", snapshot.namingSurname)
+        assertEquals(schemes, snapshot.namingSchemes)
+        assertEquals(11L, snapshot.namingActiveSchemeId)
+        assertEquals(1, snapshot.namingActiveSlotIndex)
+    }
+
+    @Test
+    fun namingDraft_invalidJson_returnsEmptySchemes() = runTest {
+        userPrefsDataStore().edit { preferences ->
+            preferences[NAMING_SURNAME_KEY] = "张"
+            preferences[NAMING_SCHEMES_JSON_KEY] = "{not-json}"
+            preferences[NAMING_ACTIVE_SCHEME_ID_KEY] = 99L
+            preferences[NAMING_ACTIVE_SLOT_INDEX_KEY] = 9
+        }
+
+        val snapshot = repository.readSnapshot()
+        assertEquals("张", snapshot.namingSurname)
+        assertEquals(emptyList<NamingScheme>(), snapshot.namingSchemes)
+        assertEquals(99L, snapshot.namingActiveSchemeId)
+        assertEquals(9, snapshot.namingActiveSlotIndex)
+    }
+
     private suspend fun clearUserPrefsDataStore() {
         userPrefsDataStore().edit { preferences ->
             preferences.clear()
@@ -127,5 +176,9 @@ class UserPrefsRepositoryRobolectricTest {
         val WEBDAV_SERVER_URL_KEY = stringPreferencesKey("webdav_server_url")
         val WEBDAV_USERNAME_KEY = stringPreferencesKey("webdav_username")
         val WEBDAV_PASSWORD_KEY = stringPreferencesKey("webdav_password")
+        val NAMING_SURNAME_KEY = stringPreferencesKey("naming_surname")
+        val NAMING_SCHEMES_JSON_KEY = stringPreferencesKey("naming_schemes_json")
+        val NAMING_ACTIVE_SCHEME_ID_KEY = longPreferencesKey("naming_active_scheme_id")
+        val NAMING_ACTIVE_SLOT_INDEX_KEY = intPreferencesKey("naming_active_slot_index")
     }
 }

@@ -1,5 +1,6 @@
-﻿package io.github.c1921.namingdict.data
+package io.github.c1921.namingdict.data
 
+import io.github.c1921.namingdict.data.model.NamingScheme
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -15,6 +16,14 @@ data class FavoritesSyncPayload(
     val version: Int = 1,
     val updatedAt: Long = 0L,
     val favoriteOrder: List<Int> = emptyList()
+)
+
+@Serializable
+data class NamePlansSyncPayload(
+    val version: Int = 1,
+    val updatedAt: Long = 0L,
+    val surname: String = "",
+    val schemes: List<NamingScheme> = emptyList()
 )
 
 data class WebDavConfig(
@@ -37,13 +46,23 @@ data class WebDavConfig(
         return "$base/$DEFAULT_FOLDER_NAME"
     }
 
-    fun buildFileUrl(): String {
-        return "${buildFolderUrl()}/$DEFAULT_FILE_NAME"
+    fun buildFileUrl(fileName: String = DEFAULT_FAVORITES_FILE_NAME): String {
+        return "${buildFolderUrl()}/$fileName"
+    }
+
+    fun buildFavoritesFileUrl(): String {
+        return buildFileUrl(DEFAULT_FAVORITES_FILE_NAME)
+    }
+
+    fun buildNamePlansFileUrl(): String {
+        return buildFileUrl(DEFAULT_NAME_PLANS_FILE_NAME)
     }
 
     companion object {
         const val DEFAULT_FOLDER_NAME = "NamingDict"
-        const val DEFAULT_FILE_NAME = "favorites.json"
+        const val DEFAULT_FAVORITES_FILE_NAME = "favorites.json"
+        const val DEFAULT_NAME_PLANS_FILE_NAME = "name_plans.json"
+        const val DEFAULT_FILE_NAME = DEFAULT_FAVORITES_FILE_NAME
     }
 }
 
@@ -60,6 +79,77 @@ class WebDavRepository(
     }
 
     suspend fun uploadFavorites(config: WebDavConfig, payload: FavoritesSyncPayload): SyncResult {
+        return uploadJsonFile(
+            config = config,
+            fileUrl = config.buildFavoritesFileUrl(),
+            body = json.encodeToString(payload)
+        )
+    }
+
+    suspend fun uploadNamePlans(config: WebDavConfig, payload: NamePlansSyncPayload): SyncResult {
+        return uploadJsonFile(
+            config = config,
+            fileUrl = config.buildNamePlansFileUrl(),
+            body = json.encodeToString(payload)
+        )
+    }
+
+    suspend fun downloadFavorites(config: WebDavConfig): Result<FavoritesSyncPayload> {
+        if (!config.isComplete()) {
+            return Result.failure(IllegalStateException("WebDAV配置不完整，无法下载"))
+        }
+        val request = Request.Builder()
+            .url(config.buildFavoritesFileUrl())
+            .header("Authorization", Credentials.basic(config.username, config.password))
+            .get()
+            .build()
+
+        return runCatching {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    error("下载失败：${httpStatusMessage(response.code)}")
+                }
+                val text = response.body?.string().orEmpty()
+                if (text.isBlank()) {
+                    error("下载失败：远端返回空内容")
+                }
+                json.decodeFromString<FavoritesSyncPayload>(text)
+            }
+        }
+    }
+
+    suspend fun downloadNamePlans(config: WebDavConfig): Result<NamePlansSyncPayload?> {
+        if (!config.isComplete()) {
+            return Result.failure(IllegalStateException("WebDAV配置不完整，无法下载"))
+        }
+        val request = Request.Builder()
+            .url(config.buildNamePlansFileUrl())
+            .header("Authorization", Credentials.basic(config.username, config.password))
+            .get()
+            .build()
+
+        return runCatching {
+            client.newCall(request).execute().use { response ->
+                if (response.code == 404) {
+                    return@use null
+                }
+                if (!response.isSuccessful) {
+                    error("下载起名方案失败：${httpStatusMessage(response.code)}")
+                }
+                val text = response.body?.string().orEmpty()
+                if (text.isBlank()) {
+                    error("下载起名方案失败：远端返回空内容")
+                }
+                json.decodeFromString<NamePlansSyncPayload>(text)
+            }
+        }
+    }
+
+    private fun uploadJsonFile(
+        config: WebDavConfig,
+        fileUrl: String,
+        body: String
+    ): SyncResult {
         if (!config.isComplete()) {
             return SyncResult(success = false, message = "WebDAV配置不完整，无法上传")
         }
@@ -69,9 +159,8 @@ class WebDavRepository(
             return folderResult
         }
 
-        val body = json.encodeToString(payload)
         val request = Request.Builder()
-            .url(config.buildFileUrl())
+            .url(fileUrl)
             .header("Authorization", Credentials.basic(config.username, config.password))
             .put(body.toRequestBody(JSON_MEDIA_TYPE))
             .build()
@@ -89,30 +178,6 @@ class WebDavRepository(
             }
         }.getOrElse { exception ->
             SyncResult(success = false, message = "上传失败：${exception.message ?: "网络异常"}")
-        }
-    }
-
-    suspend fun downloadFavorites(config: WebDavConfig): Result<FavoritesSyncPayload> {
-        if (!config.isComplete()) {
-            return Result.failure(IllegalStateException("WebDAV配置不完整，无法下载"))
-        }
-        val request = Request.Builder()
-            .url(config.buildFileUrl())
-            .header("Authorization", Credentials.basic(config.username, config.password))
-            .get()
-            .build()
-
-        return runCatching {
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    error("下载失败：${httpStatusMessage(response.code)}")
-                }
-                val text = response.body?.string().orEmpty()
-                if (text.isBlank()) {
-                    error("下载失败：远端返回空内容")
-                }
-                json.decodeFromString<FavoritesSyncPayload>(text)
-            }
         }
     }
 

@@ -1,10 +1,12 @@
 package io.github.c1921.namingdict.data
 
 import android.content.Context
+import io.github.c1921.namingdict.data.model.NamingScheme
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.catch
@@ -25,7 +27,11 @@ data class UserPrefsSnapshot(
     val dictionaryScrollOffsetPx: Int = 0,
     val dictionaryShowFavoritesOnly: Boolean = false,
     val dictionaryFavoritesScrollAnchorEntryId: Int? = null,
-    val dictionaryFavoritesScrollOffsetPx: Int = 0
+    val dictionaryFavoritesScrollOffsetPx: Int = 0,
+    val namingSurname: String = "",
+    val namingSchemes: List<NamingScheme> = emptyList(),
+    val namingActiveSchemeId: Long? = null,
+    val namingActiveSlotIndex: Int = 0
 )
 
 class UserPrefsRepository(
@@ -55,7 +61,11 @@ class UserPrefsRepository(
             dictionaryScrollOffsetPx = preferences[DICTIONARY_SCROLL_OFFSET_KEY] ?: 0,
             dictionaryShowFavoritesOnly = preferences[DICTIONARY_SHOW_FAVORITES_ONLY_KEY] ?: false,
             dictionaryFavoritesScrollAnchorEntryId = preferences[DICTIONARY_FAVORITES_SCROLL_ANCHOR_ID_KEY],
-            dictionaryFavoritesScrollOffsetPx = preferences[DICTIONARY_FAVORITES_SCROLL_OFFSET_KEY] ?: 0
+            dictionaryFavoritesScrollOffsetPx = preferences[DICTIONARY_FAVORITES_SCROLL_OFFSET_KEY] ?: 0,
+            namingSurname = preferences[NAMING_SURNAME_KEY].orEmpty(),
+            namingSchemes = decodeNamingSchemes(preferences[NAMING_SCHEMES_JSON_KEY]),
+            namingActiveSchemeId = preferences[NAMING_ACTIVE_SCHEME_ID_KEY],
+            namingActiveSlotIndex = preferences[NAMING_ACTIVE_SLOT_INDEX_KEY] ?: 0
         )
     }
 
@@ -150,6 +160,24 @@ class UserPrefsRepository(
         }
     }
 
+    suspend fun writeNamingDraft(
+        surname: String,
+        schemes: List<NamingScheme>,
+        activeSchemeId: Long?,
+        activeSlotIndex: Int
+    ) {
+        context.userPrefsDataStore.edit { preferences ->
+            preferences[NAMING_SURNAME_KEY] = surname
+            preferences[NAMING_SCHEMES_JSON_KEY] = json.encodeToString(schemes)
+            if (activeSchemeId == null) {
+                preferences.remove(NAMING_ACTIVE_SCHEME_ID_KEY)
+            } else {
+                preferences[NAMING_ACTIVE_SCHEME_ID_KEY] = activeSchemeId
+            }
+            preferences[NAMING_ACTIVE_SLOT_INDEX_KEY] = activeSlotIndex.coerceIn(0, 1)
+        }
+    }
+
     private fun decodeFavoriteOrder(raw: String?): List<Int> {
         if (raw.isNullOrBlank()) {
             return emptyList()
@@ -173,6 +201,17 @@ class UserPrefsRepository(
         }
     }
 
+    private fun decodeNamingSchemes(raw: String?): List<NamingScheme> {
+        if (raw.isNullOrBlank()) {
+            return emptyList()
+        }
+        return runCatching {
+            json.decodeFromString<List<NamingScheme>>(raw)
+        }.getOrElse {
+            emptyList()
+        }
+    }
+
     private companion object {
         val FAVORITE_ORDER_KEY = stringPreferencesKey("favorite_order")
         val SELECTED_CATEGORY_KEY = stringPreferencesKey("selected_category_key")
@@ -182,6 +221,10 @@ class UserPrefsRepository(
         val DICTIONARY_SHOW_FAVORITES_ONLY_KEY = booleanPreferencesKey("dictionary_show_favorites_only")
         val DICTIONARY_FAVORITES_SCROLL_ANCHOR_ID_KEY = intPreferencesKey("dictionary_favorites_scroll_anchor_id")
         val DICTIONARY_FAVORITES_SCROLL_OFFSET_KEY = intPreferencesKey("dictionary_favorites_scroll_offset_px")
+        val NAMING_SURNAME_KEY = stringPreferencesKey("naming_surname")
+        val NAMING_SCHEMES_JSON_KEY = stringPreferencesKey("naming_schemes_json")
+        val NAMING_ACTIVE_SCHEME_ID_KEY = longPreferencesKey("naming_active_scheme_id")
+        val NAMING_ACTIVE_SLOT_INDEX_KEY = intPreferencesKey("naming_active_slot_index")
         val WEBDAV_SERVER_URL_KEY = stringPreferencesKey("webdav_server_url")
         val WEBDAV_USERNAME_KEY = stringPreferencesKey("webdav_username")
         val WEBDAV_PASSWORD_KEY = stringPreferencesKey("webdav_password")

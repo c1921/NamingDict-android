@@ -225,12 +225,3 @@ private fun DictionaryModeControl(
         }
     }
 }
-
-@Composable
-internal fun NewFeaturePlaceholderScreen(
-    modifier: Modifier = Modifier
-) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text = stringResource(R.string.new_feature_placeholder))
-    }
-}

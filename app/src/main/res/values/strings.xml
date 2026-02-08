@@ -3,7 +3,7 @@
     <string name="tab_filter">筛选</string>
     <string name="tab_dictionary">字典</string>
     <string name="tab_favorites">收藏</string>
-    <string name="tab_new_feature">新功能</string>
+    <string name="tab_new_feature">姓名</string>
     <string name="tab_settings">设置</string>
     <string name="favorites_title">收藏</string>
     <string name="favorites_empty">暂无收藏</string>
@@ -67,4 +67,25 @@
     <string name="settings_about_github_value">github.com/c1921/NamingDict</string>
     <string name="settings_about_github_url">https://github.com/c1921/NamingDict</string>
     <string name="settings_app_version">%1$s</string>
+    <string name="naming_surname_title">姓氏</string>
+    <string name="naming_surname_edit">编辑</string>
+    <string name="naming_surname_edit_title">编辑姓氏</string>
+    <string name="naming_surname_label">输入姓氏（1-4字）</string>
+    <string name="naming_surname_length">长度：%1$d/%2$d</string>
+    <string name="naming_surname_not_set">未设置姓氏</string>
+    <string name="naming_schemes_count">方案数：%1$d</string>
+    <string name="naming_add_scheme">新增方案</string>
+    <string name="naming_scheme_count_warning">方案超过 %1$d 个后可能影响流畅度</string>
+    <string name="naming_empty_schemes">暂无方案，点击“新增方案”开始编辑</string>
+    <string name="naming_scheme_edit_title">编辑方案 %1$d</string>
+    <string name="naming_remove_scheme">删除方案</string>
+    <string name="naming_mode_single">单字名</string>
+    <string name="naming_mode_double">双字名</string>
+    <string name="naming_slot_first">名第一字</string>
+    <string name="naming_slot_second">名第二字</string>
+    <string name="naming_editor_close">关闭</string>
+    <string name="naming_preview_row_placeholder">未填写</string>
+    <string name="naming_dialog_favorites_title">收藏选字</string>
+    <string name="naming_dialog_focus_hint">先点选空位再选字</string>
+    <string name="naming_favorites_empty">暂无收藏字，请先在字典页收藏</string>
 </resources>

@@ -1,4 +1,4 @@
-﻿package io.github.c1921.namingdict.ui
+package io.github.c1921.namingdict.ui
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -8,11 +8,14 @@ import io.github.c1921.namingdict.data.DictionaryRepository
 import io.github.c1921.namingdict.data.FavoritesSyncPayload
 import io.github.c1921.namingdict.data.FilterEngine
 import io.github.c1921.namingdict.data.IndexCategory
+import io.github.c1921.namingdict.data.NamePlansSyncPayload
 import io.github.c1921.namingdict.data.SyncResult
 import io.github.c1921.namingdict.data.UserPrefsRepository
 import io.github.c1921.namingdict.data.WebDavConfig
 import io.github.c1921.namingdict.data.WebDavRepository
 import io.github.c1921.namingdict.data.model.DictEntry
+import io.github.c1921.namingdict.data.model.GivenNameMode
+import io.github.c1921.namingdict.data.model.NamingScheme
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -56,7 +59,11 @@ data class UiState(
     val dictionaryScrollOffsetPx: Int = 0,
     val dictionaryShowFavoritesOnly: Boolean = false,
     val dictionaryFavoritesScrollAnchorEntryId: Int? = null,
-    val dictionaryFavoritesScrollOffsetPx: Int = 0
+    val dictionaryFavoritesScrollOffsetPx: Int = 0,
+    val namingSurname: String = "",
+    val namingSchemes: List<NamingScheme> = emptyList(),
+    val namingActiveSchemeId: Long? = null,
+    val namingActiveSlotIndex: Int = 0
 )
 
 class DictViewModel internal constructor(
@@ -77,6 +84,7 @@ class DictViewModel internal constructor(
     private var idToEntry: Map<Int, DictEntry> = emptyMap()
     private var allIds: Set<Int> = emptySet()
     private var favoriteOrder: List<Int> = emptyList()
+    private var namingNextSchemeId: Long = 1L
     private var autoUploadJob: Job? = null
     private var recomputeFiltersJob: Job? = null
     private val syncMutex = Mutex()
@@ -146,7 +154,188 @@ class DictViewModel internal constructor(
             favoriteEntries = newFavoriteEntries
         )
         persistFavoritesOrder(favoriteOrder)
-        scheduleAutoUploadFavorites()
+        scheduleAutoUploadData()
+    }
+
+    fun updateNamingSurname(value: String) {
+        val sanitized = sanitizeSurname(value)
+        val current = _uiState.value
+        if (current.namingSurname == sanitized) {
+            return
+        }
+        val updated = current.copy(namingSurname = sanitized)
+        _uiState.value = updated
+        persistNamingDraft(updated)
+        scheduleAutoUploadData()
+    }
+
+    fun addNamingScheme() {
+        val current = _uiState.value
+        val newScheme = NamingScheme(
+            id = allocateNamingSchemeId(),
+            givenNameMode = GivenNameMode.Double,
+            slot1 = "",
+            slot2 = ""
+        )
+        val updated = current.copy(
+            namingSchemes = current.namingSchemes + newScheme,
+            namingActiveSchemeId = newScheme.id,
+            namingActiveSlotIndex = 0
+        )
+        _uiState.value = updated
+        persistNamingDraft(updated)
+        scheduleAutoUploadData()
+    }
+
+    fun removeNamingScheme(id: Long) {
+        val current = _uiState.value
+        if (current.namingSchemes.none { it.id == id }) {
+            return
+        }
+        val newSchemes = current.namingSchemes.filterNot { it.id == id }
+        val newActiveSchemeId = when {
+            newSchemes.isEmpty() -> null
+            current.namingActiveSchemeId == id -> newSchemes.last().id
+            current.namingActiveSchemeId != null &&
+                newSchemes.any { it.id == current.namingActiveSchemeId } -> current.namingActiveSchemeId
+            else -> newSchemes.last().id
+        }
+        val updated = current.copy(
+            namingSchemes = newSchemes,
+            namingActiveSchemeId = newActiveSchemeId,
+            namingActiveSlotIndex = if (newSchemes.isEmpty()) 0 else current.namingActiveSlotIndex.coerceIn(0, 1)
+        )
+        _uiState.value = updated
+        persistNamingDraft(updated)
+        scheduleAutoUploadData()
+    }
+
+    fun setNamingMode(id: Long, mode: GivenNameMode) {
+        val current = _uiState.value
+        val targetIndex = current.namingSchemes.indexOfFirst { it.id == id }
+        if (targetIndex < 0) {
+            return
+        }
+        val target = current.namingSchemes[targetIndex]
+        if (target.givenNameMode == mode) {
+            return
+        }
+        val newSchemes = current.namingSchemes.toMutableList().apply {
+            this[targetIndex] = target.copy(givenNameMode = mode)
+        }
+        val updated = current.copy(
+            namingSchemes = newSchemes,
+            namingActiveSlotIndex = if (
+                mode == GivenNameMode.Single &&
+                current.namingActiveSchemeId == id &&
+                current.namingActiveSlotIndex == 1
+            ) {
+                0
+            } else {
+                current.namingActiveSlotIndex
+            }
+        )
+        _uiState.value = updated
+        persistNamingDraft(updated)
+        scheduleAutoUploadData()
+    }
+
+    fun setActiveNamingSlot(id: Long, slotIndex: Int) {
+        val normalizedSlotIndex = slotIndex.coerceIn(0, 1)
+        val current = _uiState.value
+        if (current.namingSchemes.none { it.id == id }) {
+            return
+        }
+        if (
+            current.namingActiveSchemeId == id &&
+            current.namingActiveSlotIndex == normalizedSlotIndex
+        ) {
+            return
+        }
+        val updated = current.copy(
+            namingActiveSchemeId = id,
+            namingActiveSlotIndex = normalizedSlotIndex
+        )
+        _uiState.value = updated
+        persistNamingDraft(updated)
+    }
+
+    fun updateNamingSlotText(id: Long, slotIndex: Int, value: String) {
+        val normalizedSlotIndex = slotIndex.coerceIn(0, 1)
+        val sanitized = sanitizeSlotValue(value)
+        val current = _uiState.value
+        val targetIndex = current.namingSchemes.indexOfFirst { it.id == id }
+        if (targetIndex < 0) {
+            return
+        }
+        val target = current.namingSchemes[targetIndex]
+        val unchanged = if (normalizedSlotIndex == 0) {
+            target.slot1 == sanitized
+        } else {
+            target.slot2 == sanitized
+        }
+        if (unchanged) {
+            return
+        }
+
+        val updatedScheme = if (normalizedSlotIndex == 0) {
+            target.copy(slot1 = sanitized)
+        } else {
+            target.copy(slot2 = sanitized)
+        }
+        val newSchemes = current.namingSchemes.toMutableList().apply {
+            this[targetIndex] = updatedScheme
+        }
+        val updated = current.copy(
+            namingSchemes = newSchemes,
+            namingActiveSchemeId = id,
+            namingActiveSlotIndex = normalizedSlotIndex
+        )
+        _uiState.value = updated
+        persistNamingDraft(updated)
+        scheduleAutoUploadData()
+    }
+
+    fun fillActiveSlotFromFavorite(char: String) {
+        val sanitizedChar = sanitizeSlotValue(char)
+        if (sanitizedChar.isBlank()) {
+            return
+        }
+        val current = _uiState.value
+        val activeSchemeId = current.namingActiveSchemeId
+            ?: current.namingSchemes.firstOrNull()?.id
+            ?: return
+        val slotIndex = current.namingActiveSlotIndex.coerceIn(0, 1)
+        val targetIndex = current.namingSchemes.indexOfFirst { it.id == activeSchemeId }
+        if (targetIndex < 0) {
+            return
+        }
+        val target = current.namingSchemes[targetIndex]
+        val unchanged = if (slotIndex == 0) {
+            target.slot1 == sanitizedChar
+        } else {
+            target.slot2 == sanitizedChar
+        }
+        if (unchanged) {
+            return
+        }
+
+        val updatedScheme = if (slotIndex == 0) {
+            target.copy(slot1 = sanitizedChar)
+        } else {
+            target.copy(slot2 = sanitizedChar)
+        }
+        val newSchemes = current.namingSchemes.toMutableList().apply {
+            this[targetIndex] = updatedScheme
+        }
+        val updated = current.copy(
+            namingSchemes = newSchemes,
+            namingActiveSchemeId = activeSchemeId,
+            namingActiveSlotIndex = slotIndex
+        )
+        _uiState.value = updated
+        persistNamingDraft(updated)
+        scheduleAutoUploadData()
     }
 
     fun updateWebDavConfig(
@@ -181,7 +370,7 @@ class DictViewModel internal constructor(
         autoUploadJob?.cancel()
         viewModelScope.launch(dispatcherProvider.main) {
             runSyncExclusively(isAuto = false) {
-                uploadFavoritesNow(isAuto = false)
+                uploadAllDataNow(isAuto = false)
             }
         }
     }
@@ -190,46 +379,7 @@ class DictViewModel internal constructor(
         autoUploadJob?.cancel()
         viewModelScope.launch(dispatcherProvider.main) {
             runSyncExclusively(isAuto = false) {
-                val config = _uiState.value.webDavConfig
-                val httpsError = validateWebDavHttps(config, isAuto = false)
-                if (httpsError != null) {
-                    postSyncMessage(httpsError)
-                    return@runSyncExclusively
-                }
-                if (!config.isComplete()) {
-                    postSyncMessage("WebDAV 配置不完整，无法下载")
-                    return@runSyncExclusively
-                }
-
-                _uiState.value = _uiState.value.copy(syncInProgress = true)
-                try {
-                    val downloadResult = withContext(dispatcherProvider.io) {
-                        webDavRepository.downloadFavorites(config)
-                    }
-                    downloadResult.fold(
-                        onSuccess = { payload ->
-                            val sanitizedOrder = payload.favoriteOrder
-                                .distinct()
-                                .filter { favoriteId -> idToEntry.containsKey(favoriteId) }
-                            favoriteOrder = sanitizedOrder
-                            val favoriteIds = sanitizedOrder.toSet()
-                            val favoriteEntries = sanitizedOrder.mapNotNull { idToEntry[it] }
-                            _uiState.value = _uiState.value.copy(
-                                favoriteIds = favoriteIds,
-                                favoriteEntries = favoriteEntries,
-                                lastSyncMessage = "下载成功，已覆盖本地收藏（${favoriteIds.size}）"
-                            )
-                            persistFavoritesOrder(sanitizedOrder)
-                        },
-                        onFailure = { exception ->
-                            _uiState.value = _uiState.value.copy(
-                                lastSyncMessage = "下载失败：${exception.message ?: "网络异常"}"
-                            )
-                        }
-                    )
-                } finally {
-                    _uiState.value = _uiState.value.copy(syncInProgress = false)
-                }
+                downloadAllDataNow(isAuto = false)
             }
         }
     }
@@ -311,6 +461,14 @@ class DictViewModel internal constructor(
                 val selectedValues = sanitizeSelectedValues(snapshot.selectedValuesByCategoryKey)
                 val filteredIds = filterIdsCalculator(index, selectedValues, allIds)
                 val filteredEntries = filteredIds.mapNotNull { idToEntry[it] }.sortedBy { it.id }
+                val namingSurname = sanitizeSurname(snapshot.namingSurname)
+                val namingSchemes = sanitizeNamingSchemes(snapshot.namingSchemes)
+                namingNextSchemeId = (namingSchemes.maxOfOrNull { it.id } ?: 0L) + 1L
+                val namingActiveSchemeId = resolveNamingActiveSchemeId(
+                    activeSchemeId = snapshot.namingActiveSchemeId,
+                    schemes = namingSchemes
+                )
+                val namingActiveSlotIndex = snapshot.namingActiveSlotIndex.coerceIn(0, 1)
 
                 _uiState.value = UiState(
                     isLoading = false,
@@ -328,7 +486,11 @@ class DictViewModel internal constructor(
                     dictionaryScrollOffsetPx = snapshot.dictionaryScrollOffsetPx.coerceAtLeast(0),
                     dictionaryShowFavoritesOnly = snapshot.dictionaryShowFavoritesOnly,
                     dictionaryFavoritesScrollAnchorEntryId = snapshot.dictionaryFavoritesScrollAnchorEntryId,
-                    dictionaryFavoritesScrollOffsetPx = snapshot.dictionaryFavoritesScrollOffsetPx.coerceAtLeast(0)
+                    dictionaryFavoritesScrollOffsetPx = snapshot.dictionaryFavoritesScrollOffsetPx.coerceAtLeast(0),
+                    namingSurname = namingSurname,
+                    namingSchemes = namingSchemes,
+                    namingActiveSchemeId = namingActiveSchemeId,
+                    namingActiveSlotIndex = namingActiveSlotIndex
                 )
             } catch (ex: Exception) {
                 _uiState.value = UiState(
@@ -392,6 +554,71 @@ class DictViewModel internal constructor(
         }
     }
 
+    private fun sanitizeNamingSchemes(rawSchemes: List<NamingScheme>): List<NamingScheme> {
+        if (rawSchemes.isEmpty()) {
+            return emptyList()
+        }
+        val usedIds = mutableSetOf<Long>()
+        var nextFallbackId = (rawSchemes.maxOfOrNull { it.id.coerceAtLeast(0L) } ?: 0L) + 1L
+        return rawSchemes.map { scheme ->
+            val normalizedId = if (scheme.id > 0L && usedIds.add(scheme.id)) {
+                scheme.id
+            } else {
+                while (usedIds.contains(nextFallbackId)) {
+                    nextFallbackId++
+                }
+                val fallbackId = nextFallbackId
+                usedIds.add(fallbackId)
+                nextFallbackId++
+                fallbackId
+            }
+            scheme.copy(
+                id = normalizedId,
+                slot1 = sanitizeSlotValue(scheme.slot1),
+                slot2 = sanitizeSlotValue(scheme.slot2)
+            )
+        }
+    }
+
+    private fun resolveNamingActiveSchemeId(
+        activeSchemeId: Long?,
+        schemes: List<NamingScheme>
+    ): Long? {
+        if (schemes.isEmpty()) {
+            return null
+        }
+        if (activeSchemeId != null && schemes.any { it.id == activeSchemeId }) {
+            return activeSchemeId
+        }
+        return schemes.last().id
+    }
+
+    private fun sanitizeSurname(value: String): String {
+        return takeCodePoints(value.trim(), NAMING_SURNAME_MAX_CODE_POINTS)
+    }
+
+    private fun sanitizeSlotValue(value: String): String {
+        return takeCodePoints(value.trim(), 1)
+    }
+
+    private fun takeCodePoints(value: String, limit: Int): String {
+        if (value.isEmpty() || limit <= 0) {
+            return ""
+        }
+        val codePointCount = value.codePointCount(0, value.length)
+        if (codePointCount <= limit) {
+            return value
+        }
+        val endIndex = value.offsetByCodePoints(0, limit)
+        return value.substring(0, endIndex)
+    }
+
+    private fun allocateNamingSchemeId(): Long {
+        val id = namingNextSchemeId
+        namingNextSchemeId += 1L
+        return id
+    }
+
     private fun persistFavoritesOrder(order: List<Int>) {
         val orderSnapshot = order.toList()
         viewModelScope.launch(dispatcherProvider.io) {
@@ -413,6 +640,25 @@ class DictViewModel internal constructor(
                 userPrefsRepository.writeFilterState(category.key, selectedValuesByCategoryKey)
             }.onFailure { exception ->
                 Log.w(TAG, "Failed to persist filter state.", exception)
+            }
+        }
+    }
+
+    private fun persistNamingDraft(state: UiState) {
+        val surnameSnapshot = state.namingSurname
+        val schemesSnapshot = state.namingSchemes.toList()
+        val activeSchemeIdSnapshot = state.namingActiveSchemeId
+        val activeSlotIndexSnapshot = state.namingActiveSlotIndex.coerceIn(0, 1)
+        viewModelScope.launch(dispatcherProvider.io) {
+            runCatching {
+                userPrefsRepository.writeNamingDraft(
+                    surname = surnameSnapshot,
+                    schemes = schemesSnapshot,
+                    activeSchemeId = activeSchemeIdSnapshot,
+                    activeSlotIndex = activeSlotIndexSnapshot
+                )
+            }.onFailure { exception ->
+                Log.w(TAG, "Failed to persist naming draft.", exception)
             }
         }
     }
@@ -449,17 +695,17 @@ class DictViewModel internal constructor(
         }
     }
 
-    private fun scheduleAutoUploadFavorites() {
+    private fun scheduleAutoUploadData() {
         autoUploadJob?.cancel()
         autoUploadJob = viewModelScope.launch(dispatcherProvider.main) {
             delay(autoUploadDelayMs)
             runSyncExclusively(isAuto = true) {
-                uploadFavoritesNow(isAuto = true)
+                uploadAllDataNow(isAuto = true)
             }
         }
     }
 
-    private suspend fun uploadFavoritesNow(isAuto: Boolean) {
+    private suspend fun uploadAllDataNow(isAuto: Boolean) {
         val config = _uiState.value.webDavConfig
         val httpsError = validateWebDavHttps(config, isAuto = isAuto)
         if (httpsError != null) {
@@ -476,31 +722,126 @@ class DictViewModel internal constructor(
             return
         }
 
+        val stateSnapshot = _uiState.value
         _uiState.value = _uiState.value.copy(syncInProgress = true)
         try {
-            val payload = FavoritesSyncPayload(
+            val favoritesPayload = FavoritesSyncPayload(
                 version = 1,
                 updatedAt = nowProvider(),
                 favoriteOrder = favoriteOrder.toList()
             )
-            val syncResult = withContext(dispatcherProvider.io) {
-                webDavRepository.uploadFavorites(config, payload)
+            val namePlansPayload = NamePlansSyncPayload(
+                version = 1,
+                updatedAt = nowProvider(),
+                surname = stateSnapshot.namingSurname,
+                schemes = stateSnapshot.namingSchemes.toList()
+            )
+            val favoritesResult = withContext(dispatcherProvider.io) {
+                webDavRepository.uploadFavorites(config, favoritesPayload)
             }
-            applyUploadResult(syncResult = syncResult, isAuto = isAuto)
+            val namePlansResult = withContext(dispatcherProvider.io) {
+                webDavRepository.uploadNamePlans(config, namePlansPayload)
+            }
+            postSyncMessage(composeUploadSummary(favoritesResult, namePlansResult, isAuto))
         } finally {
             _uiState.value = _uiState.value.copy(syncInProgress = false)
         }
     }
 
-    private fun applyUploadResult(syncResult: SyncResult, isAuto: Boolean) {
-        val message = if (isAuto) {
-            "自动同步：${syncResult.message}"
-        } else {
-            syncResult.message
+    private suspend fun downloadAllDataNow(isAuto: Boolean) {
+        val config = _uiState.value.webDavConfig
+        val httpsError = validateWebDavHttps(config, isAuto = isAuto)
+        if (httpsError != null) {
+            postSyncMessage(httpsError)
+            return
         }
-        _uiState.value = _uiState.value.copy(
-            lastSyncMessage = message
-        )
+        if (!config.isComplete()) {
+            val message = if (isAuto) {
+                "自动同步已跳过：WebDAV 配置不完整"
+            } else {
+                "WebDAV 配置不完整，无法下载"
+            }
+            postSyncMessage(message)
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(syncInProgress = true)
+        try {
+            val favoritesDownloadResult = withContext(dispatcherProvider.io) {
+                webDavRepository.downloadFavorites(config)
+            }
+            val favoritesMessage = favoritesDownloadResult.fold(
+                onSuccess = { payload ->
+                    val sanitizedOrder = payload.favoriteOrder
+                        .distinct()
+                        .filter { favoriteId -> idToEntry.containsKey(favoriteId) }
+                    favoriteOrder = sanitizedOrder
+                    val favoriteIds = sanitizedOrder.toSet()
+                    val favoriteEntries = sanitizedOrder.mapNotNull { idToEntry[it] }
+                    _uiState.value = _uiState.value.copy(
+                        favoriteIds = favoriteIds,
+                        favoriteEntries = favoriteEntries
+                    )
+                    persistFavoritesOrder(sanitizedOrder)
+                    "收藏：下载成功（${favoriteIds.size}）"
+                },
+                onFailure = { exception ->
+                    "收藏：下载失败（${exception.message ?: "网络异常"}）"
+                }
+            )
+
+            val namePlansDownloadResult = withContext(dispatcherProvider.io) {
+                webDavRepository.downloadNamePlans(config)
+            }
+            val namePlansMessage = namePlansDownloadResult.fold(
+                onSuccess = { payload ->
+                    if (payload == null) {
+                        "起名方案：远端不存在，保留本地"
+                    } else {
+                        val namingSchemes = sanitizeNamingSchemes(payload.schemes)
+                        namingNextSchemeId = (namingSchemes.maxOfOrNull { it.id } ?: 0L) + 1L
+                        val current = _uiState.value
+                        val updated = current.copy(
+                            namingSurname = sanitizeSurname(payload.surname),
+                            namingSchemes = namingSchemes,
+                            namingActiveSchemeId = resolveNamingActiveSchemeId(
+                                activeSchemeId = current.namingActiveSchemeId,
+                                schemes = namingSchemes
+                            ),
+                            namingActiveSlotIndex = current.namingActiveSlotIndex.coerceIn(0, 1)
+                        )
+                        _uiState.value = updated
+                        persistNamingDraft(updated)
+                        "起名方案：下载成功（${namingSchemes.size}）"
+                    }
+                },
+                onFailure = { exception ->
+                    "起名方案：下载失败（${exception.message ?: "网络异常"}）"
+                }
+            )
+
+            postSyncMessage(composeDownloadSummary(favoritesMessage, namePlansMessage, isAuto))
+        } finally {
+            _uiState.value = _uiState.value.copy(syncInProgress = false)
+        }
+    }
+
+    private fun composeUploadSummary(
+        favoritesResult: SyncResult,
+        namePlansResult: SyncResult,
+        isAuto: Boolean
+    ): String {
+        val summary = "收藏：${favoritesResult.message}；起名方案：${namePlansResult.message}"
+        return if (isAuto) "自动同步：$summary" else summary
+    }
+
+    private fun composeDownloadSummary(
+        favoritesMessage: String,
+        namePlansMessage: String,
+        isAuto: Boolean
+    ): String {
+        val summary = "$favoritesMessage；$namePlansMessage"
+        return if (isAuto) "自动同步：$summary" else summary
     }
 
     private suspend fun runSyncExclusively(isAuto: Boolean, block: suspend () -> Unit) {
@@ -538,6 +879,7 @@ class DictViewModel internal constructor(
         private const val HTTPS_REQUIRED_MESSAGE = "WebDAV 地址必须使用 HTTPS（https://）"
         private const val HTTPS_REQUIRED_SAVE_MESSAGE = "仅支持 HTTPS WebDAV 地址，请使用 https://"
         private const val SYNC_IN_PROGRESS_MESSAGE = "同步进行中，请稍后"
+        private const val NAMING_SURNAME_MAX_CODE_POINTS = 4
 
         fun factory(
             repository: DictionaryRepository,

@@ -1,4 +1,4 @@
-﻿package io.github.c1921.namingdict.ui
+package io.github.c1921.namingdict.ui
 
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -85,6 +85,13 @@ fun AppRoot(viewModel: DictViewModel) {
             onPersistDictionaryScrollState = viewModel::persistDictionaryScrollState,
             onSetDictionaryShowFavoritesOnly = viewModel::setDictionaryShowFavoritesOnly,
             onPersistDictionaryFavoritesScrollState = viewModel::persistDictionaryFavoritesScrollState,
+            onUpdateNamingSurname = viewModel::updateNamingSurname,
+            onAddNamingScheme = viewModel::addNamingScheme,
+            onRemoveNamingScheme = viewModel::removeNamingScheme,
+            onSetNamingMode = viewModel::setNamingMode,
+            onSetActiveNamingSlot = viewModel::setActiveNamingSlot,
+            onUpdateNamingSlotText = viewModel::updateNamingSlotText,
+            onFillActiveSlotFromFavorite = viewModel::fillActiveSlotFromFavorite,
             showDictionarySearchDialog = showDictionarySearchDialog,
             onShowDictionarySearchDialogChange = { showDictionarySearchDialog = it },
             dictionarySearchQuery = dictionarySearchQuery,

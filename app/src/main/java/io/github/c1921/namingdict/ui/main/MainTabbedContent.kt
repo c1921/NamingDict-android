@@ -9,9 +9,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -37,6 +37,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import io.github.c1921.namingdict.R
 import io.github.c1921.namingdict.data.IndexCategory
+import io.github.c1921.namingdict.data.model.GivenNameMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +56,13 @@ internal fun MainTabbedContent(
     onPersistDictionaryScrollState: (Int?, Int) -> Unit,
     onSetDictionaryShowFavoritesOnly: (Boolean) -> Unit,
     onPersistDictionaryFavoritesScrollState: (Int?, Int) -> Unit,
+    onUpdateNamingSurname: (String) -> Unit,
+    onAddNamingScheme: () -> Unit,
+    onRemoveNamingScheme: (Long) -> Unit,
+    onSetNamingMode: (Long, GivenNameMode) -> Unit,
+    onSetActiveNamingSlot: (Long, Int) -> Unit,
+    onUpdateNamingSlotText: (Long, Int, String) -> Unit,
+    onFillActiveSlotFromFavorite: (String) -> Unit,
     showDictionarySearchDialog: Boolean,
     onShowDictionarySearchDialogChange: (Boolean) -> Unit,
     dictionarySearchQuery: String,
@@ -161,7 +169,7 @@ internal fun MainTabbedContent(
                             val icon = when (tab) {
                                 MainTab.Filter -> Icons.Outlined.FilterList
                                 MainTab.Dictionary -> Icons.AutoMirrored.Outlined.MenuBook
-                                MainTab.NewFeature -> Icons.Outlined.StarBorder
+                                MainTab.NewFeature -> Icons.Outlined.Person
                                 MainTab.Settings -> Icons.Outlined.Settings
                             }
                             Icon(
@@ -199,7 +207,17 @@ internal fun MainTabbedContent(
                 modifier = Modifier.padding(innerPadding)
             )
 
-            MainTab.NewFeature -> NewFeaturePlaceholderScreen(modifier = Modifier.padding(innerPadding))
+            MainTab.NewFeature -> NameComposerScreen(
+                uiState = uiState,
+                onUpdateNamingSurname = onUpdateNamingSurname,
+                onAddNamingScheme = onAddNamingScheme,
+                onRemoveNamingScheme = onRemoveNamingScheme,
+                onSetNamingMode = onSetNamingMode,
+                onSetActiveNamingSlot = onSetActiveNamingSlot,
+                onUpdateNamingSlotText = onUpdateNamingSlotText,
+                onFillActiveSlotFromFavorite = onFillActiveSlotFromFavorite,
+                modifier = Modifier.padding(innerPadding)
+            )
 
             MainTab.Settings -> SettingsScreen(
                 uiState = uiState,

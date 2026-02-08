@@ -5,10 +5,10 @@
     <string name="settings_webdav_password">密码</string>
     <string name="settings_webdav_password_show">显示密码</string>
     <string name="settings_webdav_password_hide">隐藏密码</string>
-    <string name="settings_webdav_default_location">默认保存位置：/NamingDict/favorites.json（目录不存在会自动创建）</string>
+    <string name="settings_webdav_default_location">默认保存位置：/NamingDict/favorites.json 与 /NamingDict/name_plans.json（目录不存在会自动创建）</string>
     <string name="settings_webdav_save">保存配置</string>
-    <string name="settings_webdav_upload">上传收藏</string>
-    <string name="settings_webdav_download">下载收藏</string>
+    <string name="settings_webdav_upload">上传数据</string>
+    <string name="settings_webdav_download">下载数据</string>
     <string name="settings_webdav_sync_status">同步状态</string>
     <string name="settings_webdav_status_idle">尚未执行同步</string>
     <string name="settings_webdav_status_syncing">同步中...</string>
